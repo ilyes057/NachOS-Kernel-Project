@@ -64,7 +64,8 @@ static void WriteDone(int arg) { writeDone->V(); }
 //      the output.  Stop when the user types a 'q'.
 //----------------------------------------------------------------------
 
-void ConsoleTest(char *in, char *out) {
+void ConsoleTest(char *in, char *out)
+{
     char ch;
 
     console = new Console(in, out, ReadAvail, WriteDone, 0);
@@ -72,11 +73,20 @@ void ConsoleTest(char *in, char *out) {
     writeDone = new Semaphore("write done", 0);
 
     for (;;) {
-        readAvail->P(); // wait for character to arrive
+        readAvail->P();
         ch = console->GetChar();
-        console->PutChar(ch); // echo it!
-        writeDone->P();       // wait for write to finish
-        if (ch == 'q')
-            return; // if q, quit
+
+        if (ch == 'q' || ch == EOF) {
+            return;  // Exit the test
+        }
+
+        console->PutChar('<');
+        writeDone->P();    
+
+        console->PutChar(ch);
+        writeDone->P();     
+
+        console->PutChar('>');
+        writeDone->P();     
     }
 }
