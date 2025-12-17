@@ -16,7 +16,8 @@ Thread *threadToBeDestroyed; // the thread that just finished
 Scheduler *scheduler;        // the ready list
 Interrupt *interrupt;        // interrupt status
 Statistics *stats;           // performance metrics
-Timer *timer;                // the hardware timer device,
+Timer *timer;
+                // the hardware timer device,
                              // for invoking context switches
 
 #ifdef FILESYS_NEEDED
@@ -35,6 +36,9 @@ Machine *machine;   // user program memory and registers
 PostOffice *postOffice;
 #endif
 
+#ifdef USER_PROGRAM
+SynchConsole *synchconsole;
+#endif
 // External definition, to allow us to take a pointer to this function
 extern void Cleanup();
 
@@ -143,6 +147,7 @@ void Initialize(int argc, char **argv) {
 
 #ifdef USER_PROGRAM
     machine = new Machine(debugUserProg); // this must come first
+    synchconsole = new SynchConsole(NULL, NULL);
 #endif
 
 #ifdef FILESYS
@@ -183,6 +188,9 @@ void Cleanup() {
     delete timer;
     delete scheduler;
     delete interrupt;
+    delete synchconsole;
+    synchconsole = NULL;
+
 
     Exit(0);
 }

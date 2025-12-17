@@ -15,6 +15,9 @@
 #include "thread.h"
 #include "timer.h"
 #include "utility.h"
+#include "synchconsole.h"
+
+
 
 // Initialization and cleanup routines
 extern void Initialize(int argc, char **argv); // Initialization,
@@ -32,6 +35,11 @@ extern Timer *timer;                // the hardware alarm clock
 #ifdef USER_PROGRAM
 #include "machine.h"
 extern Machine *machine; // user program memory and registers
+#endif
+
+#ifdef USER_PROGRAM
+#include "synchconsole.h"
+extern SynchConsole *synchconsole;
 #endif
 
 #ifdef FILESYS_NEEDED // FILESYS or FILESYS_STUB
