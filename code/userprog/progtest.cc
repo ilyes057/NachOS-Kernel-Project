@@ -13,6 +13,7 @@
 #include "copyright.h"
 #include "synch.h"
 #include "system.h"
+#include "synchconsole.h"
 
 //----------------------------------------------------------------------
 // StartProcess
@@ -90,3 +91,23 @@ void ConsoleTest(char *in, char *out)
         writeDone->P();     
     }
 }
+
+// Basic echo test that exercises the synchronized console API
+void SynchConsoleTest(char *in, char *out) {
+    SynchConsole *synchConsole = new SynchConsole(in, out);
+
+    for (;;) {
+        char ch = synchConsole->SynchGetChar();
+
+        if (ch == 'q' || ch == EOF) {
+            break;
+        }
+
+        synchConsole->SynchPutChar('<');
+        synchConsole->SynchPutChar(ch);
+        synchConsole->SynchPutChar('>');
+    }
+
+    delete synchConsole;
+}
+
