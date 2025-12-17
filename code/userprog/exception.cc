@@ -102,6 +102,20 @@ void ExceptionHandler(ExceptionType which) {
             delete[] buf;
             break;
         }
+        case SC_Exit:{
+            int x = machine->ReadRegister(4);
+            DEBUG('r', "Shutdown, exit called with status %d.\n",x);
+            interrupt->Halt();
+            break;
+        }
+        case SC_GetChar:{
+            char c=synchconsole->SynchGetChar();
+            if (c==EOF){
+                machine->WriteRegister(2, -1);
+            }
+            machine->WriteRegister(2, (int)(unsigned char)c);
+            break;
+        }
         default: {
             printf("Unexpected user mode exception %d %d\n", which, type);
             ASSERT(FALSE);
