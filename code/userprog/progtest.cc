@@ -93,21 +93,12 @@ void ConsoleTest(char *in, char *out)
 }
 
 // Basic echo test that exercises the synchronized console API
-void SynchConsoleTest(char *in, char *out) {
-    SynchConsole *synchConsole = new SynchConsole(in, out);
-
-    for (;;) {
-        char ch = synchConsole->SynchGetChar();
-
-        if (ch == 'q' || ch == EOF) {
-            break;
-        }
-
-        synchConsole->SynchPutChar('<');
-        synchConsole->SynchPutChar(ch);
-        synchConsole->SynchPutChar('>');
-    }
-
-    delete synchConsole;
+void SynchConsoleTest (char *in, char *out)
+{
+    char ch;
+    SynchConsole *synchconsole = new SynchConsole(in, out);
+    while ((ch = synchconsole->SynchGetChar()) != EOF)
+        synchconsole->SynchPutChar(ch);
+    fprintf(stderr, "Solaris: EOF detected in SynchConsole!\n");
 }
 
