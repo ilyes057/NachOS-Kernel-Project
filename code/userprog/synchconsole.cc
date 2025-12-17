@@ -1,4 +1,3 @@
-//#ifdef CHANGED
 #include "copyright.h"
 #include "system.h"
 #include "synchconsole.h"
@@ -56,4 +55,3 @@ void SynchConsole::SynchGetString(char *s, int n)
     s[n]='\0';//end of string
     
 }
-//#endif // CHANGED

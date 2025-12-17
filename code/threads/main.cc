@@ -106,7 +106,7 @@ int main(int argc, char **argv) {
             interrupt->Halt(); // once we start the console, then
                                // Nachos will loop forever waiting
                                // for console input
-        } else if (!strcmp(*argv, "-sc")){
+        } /*else if (!strcmp(*argv, "-sc")){
             if (argc == 1)
                 SynchConsole(NULL, NULL);
             else {
@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
                 SynchConsole(*(argv + 1), *(argv + 2));
                 argCount = 3;
             }
-        }
+        }*/
 #endif // USER_PROGRAM
 #ifdef FILESYS
         if (!strcmp(*argv, "-cp")) { // copy from UNIX to Nachos
