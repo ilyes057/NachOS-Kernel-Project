@@ -59,6 +59,7 @@ extern void ThreadTest(void),
     Copy(const char *unixFile, const char *nachosFile);
 extern void Print(char *file), PerformanceTest(void);
 extern void StartProcess(char *file), ConsoleTest(char *in, char *out);
+extern void SynchConsoleTest(char *in, char *out);
 extern void MailTest(int networkID);
 
 //----------------------------------------------------------------------
@@ -108,10 +109,10 @@ int main(int argc, char **argv) {
                                // for console input
         } /*else if (!strcmp(*argv, "-sc")){
             if (argc == 1)
-                SynchConsole(NULL, NULL);
+                SynchConsoleTest(NULL, NULL);
             else {
                 ASSERT(argc > 2);
-                SynchConsole(*(argv + 1), *(argv + 2));
+                SynchConsoleTest(*(argv + 1), *(argv + 2));
                 argCount = 3;
             }
         }*/
