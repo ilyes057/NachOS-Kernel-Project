@@ -51,6 +51,14 @@ Halt:
 
 	.globl Exit
 	.ent	Exit
+PutChar:
+	addiu $2,$0,SC_PutChar
+	syscall
+	j	$31
+	.end PutChar
+
+	.globl Exit
+	.ent	Exit
 Exit:
 	addiu $2,$0,SC_Exit
 	syscall
