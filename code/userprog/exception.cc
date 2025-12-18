@@ -110,10 +110,20 @@ void ExceptionHandler(ExceptionType which) {
         }
         case SC_GetChar:{
             char c=synchconsole->SynchGetChar();
-            if (c==EOF){
-                machine->WriteRegister(2, -1);
+            machine->WriteRegister(2, (int)c);
+            break;
+        }
+        case SC_GetString:{
+            int userAddr = machine->ReadRegister(4);
+            int length = machine->ReadRegister(5);
+            char *buf = new char[length + 1];
+            synchconsole->SynchGetString(buf, length);
+            //copy to machine memory
+            for (int i = 0; i < length-1; i++) {
+                machine->WriteMem(userAddr + i, 1, buf[i]);
+                if(buf[i]=='\0'){break;}
             }
-            machine->WriteRegister(2, (int)(unsigned char)c);
+            delete[] buf;
             break;
         }
         default: {
@@ -125,5 +135,4 @@ void ExceptionHandler(ExceptionType which) {
 
     // LB: Do not forget to increment the pc before returning!
     UpdatePC();
-    // End of addition
 }

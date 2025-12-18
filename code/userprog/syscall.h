@@ -130,6 +130,8 @@ void Yield();
 
 void PutChar(char c);
 void PutString(char *s);
+char GetChar();
+void GetString(char *s, int n);
 #endif // IN_USER_MODE
 
 #endif /* SYSCALL_H */

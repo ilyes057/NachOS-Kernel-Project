@@ -17,7 +17,7 @@
 #include "utility.h"
 #include "synchconsole.h"
 
-#define MAX_STRING_SIZE 8
+#define MAX_STRING_SIZE 256
 
 
 // Initialization and cleanup routines
@@ -32,6 +32,7 @@ extern Scheduler *scheduler;        // the ready list
 extern Interrupt *interrupt;        // interrupt status
 extern Statistics *stats;           // performance metrics
 extern Timer *timer;                // the hardware alarm clock
+extern SynchConsole *synchconsole;
 
 #ifdef USER_PROGRAM
 #include "machine.h"

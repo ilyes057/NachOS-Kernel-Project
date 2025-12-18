@@ -19,7 +19,6 @@ Statistics *stats;           // performance metrics
 Timer *timer;
                 // the hardware timer device,
                              // for invoking context switches
-
 #ifdef FILESYS_NEEDED
 FileSystem *fileSystem;
 #endif
@@ -30,15 +29,14 @@ SynchDisk *synchDisk;
 
 #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
 Machine *machine;   // user program memory and registers
+SynchConsole *synchconsole;
+
 #endif
 
 #ifdef NETWORK
 PostOffice *postOffice;
 #endif
 
-#ifdef USER_PROGRAM
-SynchConsole *synchconsole;
-#endif
 // External definition, to allow us to take a pointer to this function
 extern void Cleanup();
 
@@ -174,6 +172,7 @@ void Cleanup() {
 #endif
 
 #ifdef USER_PROGRAM
+    delete synchconsole;
     delete machine;
 #endif
 
@@ -188,9 +187,6 @@ void Cleanup() {
     delete timer;
     delete scheduler;
     delete interrupt;
-    delete synchconsole;
-    synchconsole = NULL;
-
 
     Exit(0);
 }

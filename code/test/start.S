@@ -48,7 +48,7 @@ Halt:
 	syscall
 	j	$31
 	.end Halt
-
+	
 	.globl Exit
 	.ent	Exit
 Exit:
