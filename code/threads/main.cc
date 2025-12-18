@@ -116,6 +116,17 @@ int main(int argc, char **argv) {
                 argCount = 3;
             }
         }
+        else if (!strcmp(*argv, "-sc")) { // test the synchronous console
+            if (argc == 1)
+                SynchConsoleTest(NULL, NULL);
+            else {
+                ASSERT(argc > 2);
+                SynchConsoleTest(*(argv + 1), *(argv + 2));
+                argCount = 3;
+            }
+            interrupt->Halt();
+        }
+
 #endif // USER_PROGRAM
 #ifdef FILESYS
         if (!strcmp(*argv, "-cp")) { // copy from UNIX to Nachos
