@@ -37,9 +37,6 @@ SynchConsole *synchconsole;
 PostOffice *postOffice;
 #endif
 
-#ifdef USER_PROGRAM
-SynchConsole *synchconsole;
-#endif
 // External definition, to allow us to take a pointer to this function
 extern void Cleanup();
 
@@ -190,9 +187,6 @@ void Cleanup() {
     delete timer;
     delete scheduler;
     delete interrupt;
-    delete synchconsole;
-    synchconsole = NULL;
-
 
     Exit(0);
 }

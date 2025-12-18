@@ -17,7 +17,7 @@
 #include "utility.h"
 #include "synchconsole.h"
 
-#define MAX_STRING_SIZE 8
+#define MAX_STRING_SIZE 256
 
 
 // Initialization and cleanup routines
