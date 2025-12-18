@@ -60,26 +60,69 @@ static void UpdatePC() {
 //      "which" is the kind of exception.  The list of possible exceptions
 //      are in machine.h.
 //----------------------------------------------------------------------
+static void copyStringFromMachine(int from, char *to, unsigned size)
+{
+    if (size == 0) return;
+    unsigned i = 0;
+    int ch = 0;
+    for (; i < size - 1; i++) {
+        if (!machine->ReadMem(from + (int)i, 1, &ch)) {
+            break;
+        }
+        to[i] = (char)ch;
+        if (to[i] == '\0') {
+            return;
+        }
+    }
+    to[size - 1] = '\0';
+}
 
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2);
 
     if (which == SyscallException) {
         switch (type) {
-            case SC_Halt: 
-                DEBUG('a', "Shutdown, initiated by user program.\n");
-                interrupt->Halt();
-                break;
-            
-            case SC_PutChar: 
-                char c = (char)machine->ReadRegister(4);
-                synchconsole->SynchPutChar(c);
-                break;
-            
-            default: 
-                printf("Unexpected user mode exception %d %d\n", which, type);
-                ASSERT(FALSE);
+        case SC_Halt: {
+            DEBUG('a', "Shutdown, initiated by user program.\n");
+            interrupt->Halt();
+            break;
+        }
+        case SC_PutChar: {
+            ASSERT(synchconsole != NULL);
+            int x = machine->ReadRegister(4);
+            char c = (char)x;
+            synchconsole->SynchPutChar(c);
+            break;
+        }
+        case SC_PutString: {
+            int userAddr = machine->ReadRegister(4);
+            char *buf = new char[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, buf, MAX_STRING_SIZE);
+            synchconsole->SynchPutString(buf);
+            delete[] buf;
+            break;
+        }
+        case SC_Exit:{
+            int x = machine->ReadRegister(4);
+            DEBUG('r', "Shutdown, exit called with status %d.\n",x);
+            interrupt->Halt();
+            break;
+        }
+        case SC_GetChar:{
+            char c=synchconsole->SynchGetChar();
+            if (c==EOF){
+                machine->WriteRegister(2, -1);
             }
-    UpdatePC();
+            machine->WriteRegister(2, (int)(unsigned char)c);
+            break;
+        }
+        default: {
+            printf("Unexpected user mode exception %d %d\n", which, type);
+            ASSERT(FALSE);
+        }
+    }
 }
+
+    // LB: Do not forget to increment the pc before returning!
+    UpdatePC();
 }
