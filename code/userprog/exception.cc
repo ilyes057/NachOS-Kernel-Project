@@ -126,6 +126,25 @@ void ExceptionHandler(ExceptionType which) {
             delete[] buf;
             break;
         }
+        case SC_PutInt:{
+            int value = machine->ReadRegister(4);
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%d", value);
+            synchconsole->SynchPutString(buf);
+            break;
+        }
+        case SC_GetInt:{
+            int userPtr = machine->ReadRegister(4);
+            int buf_size =32;
+            char buf[buf_size];
+            synchconsole->SynchGetString(buf,buf_size);
+            int value=0;
+            int ok = sscanf(buf, "%d", &value);
+            if (ok != 1) value = 0;
+
+            machine->WriteMem(userPtr, 4, value);
+            break;
+        }
         default: {
             printf("Unexpected user mode exception %d %d\n", which, type);
             ASSERT(FALSE);
