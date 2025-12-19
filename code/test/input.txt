@@ -1,0 +1,46 @@
+# Section 1: Simple Characters
+abcdefghijklmnopqrstuvwxyz
+ABCDEFGHIJKLMNOPQRSTUVWXYZ
+0123456789
+	Tabulated	Line
+   Spaces   
+
+# Section 2: String Lengths
+# Length 0 (Empty line below)
+
+# Length 1
+A
+# Length 10
+0123456789
+# Length 30
+ThisStringIsExactly30CharsLong
+# Length 80+
+This is a very long string designed to exceed standard buffer limits of eighty characters to verify that the kernel truncates safely without crashing the system or leaking memory.
+
+# Section 3: Integers
+0
+-1
+42
+-999
+2147483647
+-2147483648
+
+# Section 4: Mixed Tests
+Count 5
+-10 Degrees
+Model X99
+
+# Section 5: Problematic Cases
+ÿ
+"Double Quotes"
+'Single Quotes'
+Back\Slash\Path
+Null\0Byte (If handled as text)
+
+# Section 6: Multi-line and Accents
+Ligne 1: Début du test
+Ligne 2: Caractères spéciaux: é à è ù ç
+Ligne 3: Fin du bloc
+
+# EOF Test
+STOP

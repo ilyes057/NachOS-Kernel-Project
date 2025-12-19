@@ -47,14 +47,16 @@ void SynchConsole::SynchGetString(char *s, int n)
     {
         /* code */
         char c =SynchGetChar();
-        if (c=='\0'){
+        if (c==EOF){
             break;
+        }
+        if (c == '\n') {
+            s[i] = '\n'; // Keep the newline
+            i++;
+            break; 
         }
         s[i]=(char)c;
         i++;
-        if(c=='\n' ){//EOF
-            break;
-        }
     }
     s[i]='\0';//end of string
     
