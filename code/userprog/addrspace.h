@@ -16,8 +16,13 @@
 #include "copyright.h"
 #include "filesys.h"
 #include "translate.h"
+#include "bitmap.h"
 
-#define UserStackSize 1024 // increase this as necessary!
+class Lock;
+class Semaphore;
+
+#define UserStackSize 256 // increase this as necessary!
+#define MAX_USER_THREADS 4
 
 class AddrSpace {
   public:
@@ -32,11 +37,20 @@ class AddrSpace {
     void SaveState();    // Save/restore address space-specific
     void RestoreState(); // info on a context switch
 
+    Lock *userLock;
+    Semaphore *userThreadSem;
+    int nbThreads=0;
+
+    int AllocateUserStack(int* outSlot, int* outSp);
+    void FreeUserStack(int slot);
+
   private:
     TranslationEntry *pageTable; // Assume linear page table translation
     // for now!
     unsigned int numPages; // Number of pages in the virtual
     // address space
+    int stackStartMain;
+    BitMap *stackMap;
 };
 
 #endif // ADDRSPACE_H

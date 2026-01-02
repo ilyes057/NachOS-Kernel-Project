@@ -83,6 +83,15 @@ void ExceptionHandler(ExceptionType which) {
     if (which == SyscallException) {
         switch (type) {
         case SC_Halt: {
+            AddrSpace *space = currentThread->space;
+            ASSERT(space != NULL);
+            space->userLock->Acquire();
+            while (space->nbThreads > 0) {
+                space->userLock->Release();
+                space->userThreadSem->P();
+                space->userLock->Acquire();
+            }
+            space->userLock->Release();
             DEBUG('a', "Shutdown, initiated by user program.\n");
             interrupt->Halt();
             break;

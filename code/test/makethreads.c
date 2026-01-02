@@ -14,12 +14,11 @@ void thread_func(void *arg) {
 int main() {
     UserThreadCreate(thread_func, (void *)'A');
     UserThreadCreate(thread_func, (void *)'B');
+    UserThreadCreate(thread_func, (void *)'C');
+
 
     /* Important: main must not Halt immediately */
     /* Otherwise threads may be killed */
-    for (;;) {
-        /* busy wait */
-    }
 
     Halt(); /* never reached */
     return 0;
