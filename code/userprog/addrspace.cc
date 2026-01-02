@@ -61,6 +61,10 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     NoffHeader noffH;
     unsigned int i, size;
 
+    userLock =new Lock("userLock");
+    userThreadSem = new Semaphore("userThreadSem", 1);
+    stackMap = new BitMap(MAX_USER_THREADS);
+    stackMap->Mark(0);
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) &&
         (WordToHost(noffH.noffMagic) == NOFFMAGIC))
@@ -69,7 +73,7 @@ AddrSpace::AddrSpace(OpenFile *executable) {
 
     // how big is address space?
     size = noffH.code.size + noffH.initData.size + noffH.uninitData.size +
-           UserStackSize; // we need to increase the size
+           UserStackSize * MAX_USER_THREADS; // we need to increase the size
     // to leave room for the stack
     numPages = divRoundUp(size, PageSize);
     size = numPages * PageSize;
@@ -122,7 +126,33 @@ AddrSpace::~AddrSpace() {
     // LB: Missing [] for delete
     // delete pageTable;
     delete[] pageTable;
+    delete userThreadSem;
+    delete userLock;
+    delete stackMap;
     // End of modification
+}
+
+int AddrSpace::AllocateUserStack(int* outSlot, int* outSp) {
+    int slot = stackMap->Find();
+    if (slot < 0) {
+        return -1;
+    }
+    int sp = stackStartMain - slot * UserStackSize;
+    sp &= ~0x3; // keep word alignment
+
+    *outSlot = slot;
+    *outSp = sp;
+    return 0;
+}
+
+void AddrSpace::FreeUserStack(int slot) {
+    if (slot < 0 || slot >= MAX_USER_THREADS) {
+        return;
+    }
+    if (!stackMap->Test(slot)) {
+        return;
+    }
+    stackMap->Clear(slot);
 }
 
 //----------------------------------------------------------------------
@@ -151,7 +181,8 @@ void AddrSpace::InitRegisters() {
     // Set the stack register to the end of the address space, where we
     // allocated the stack; but subtract off a bit, to make sure we don't
     // accidentally reference off the end!
-    machine->WriteRegister(StackReg, numPages * PageSize - 16);
+    stackStartMain=numPages * PageSize - 16;
+    machine->WriteRegister(StackReg, stackStartMain);
     DEBUG('a', "Initializing stack register to %d\n", numPages * PageSize - 16);
 }
 

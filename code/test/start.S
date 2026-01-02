@@ -176,6 +176,21 @@ GetInt:
     syscall
     j $31
 	.end GetInt
+	.global UserThreadCreate
+	.ent UserThreadCreate
+UserThreadCreate:
+	addiu $2,$0,SC_UserThreadCreate
+    syscall
+    j $31
+	.end UserThreadCreate
+
+	.global UserThreadExit
+	.ent UserThreadExit
+UserThreadExit:
+	addiu $2,$0,SC_UserThreadExit
+    syscall
+    j $31
+	.end UserThreadExit
 
 
 /* dummy function to keep gcc happy */
