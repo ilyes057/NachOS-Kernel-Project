@@ -35,9 +35,8 @@
 #define SC_GetString 14
 #define SC_PutInt 15
 #define SC_GetInt 16
-
-#define SC_UserThreadCreate 15
-#define SC_UserThreadExit 16
+#define SC_UserThreadCreate 17
+#define SC_UserThreadExit 18
 
 #ifdef IN_USER_MODE
 
@@ -136,13 +135,10 @@ void PutChar(char c);
 void PutString(char *s);
 char GetChar();
 void GetString(char *s, int n);
-<<<<<<< HEAD
 void PutInt(int n);
 void GetInt(int *n);
-=======
 int UserThreadCreate(void f(void *arg), void *arg);
 void UserThreadExit();
->>>>>>> feature/maria
 #endif // IN_USER_MODE
 
 #endif /* SYSCALL_H */
