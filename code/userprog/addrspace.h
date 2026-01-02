@@ -22,7 +22,7 @@ class Lock;
 class Semaphore;
 
 #define UserStackSize 256 // increase this as necessary!
-#define MAX_USER_THREADS 4
+#define MAX_USER_THREADS 6
 
 class AddrSpace {
   public:
@@ -43,6 +43,10 @@ class AddrSpace {
 
     int AllocateUserStack(int* outSlot, int* outSp);
     void FreeUserStack(int slot);
+    bool tidUsed[MAX_USER_THREADS];
+    bool finished[MAX_USER_THREADS];
+    bool joined[MAX_USER_THREADS];
+    Semaphore* joinSem[MAX_USER_THREADS];
 
   private:
     TranslationEntry *pageTable; // Assume linear page table translation

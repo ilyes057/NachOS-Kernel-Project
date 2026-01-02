@@ -36,6 +36,7 @@ static void StartUserThread(int f){
     ASSERT(FALSE);//bcs Run must not return
 }
 
+
 int do_UserThreadCreate(int f, int arg){
     AddrSpace *space = currentThread->space;
     if (space == NULL) {
@@ -57,6 +58,11 @@ int do_UserThreadCreate(int f, int arg){
         delete a;
         return -1;
     }
+    space->tidUsed[slot]  = true;
+    space->finished[slot] = false;
+    space->joined[slot]   = false;
+    if (space->joinSem[slot] != nullptr) delete space->joinSem[slot];
+    space->joinSem[slot] = new Semaphore("joinSem", 0);
     a->sp=sp;
     a->slot = slot;
     space->nbThreads++;
@@ -66,26 +72,76 @@ int do_UserThreadCreate(int f, int arg){
     if (t == nullptr) {
         space->userLock->Acquire();
         space->FreeUserStack(slot);
+        space->tidUsed[slot] = false;
+        space->finished[slot] = false;
+        space->joined[slot] = false;
+    if (space->joinSem[slot] != nullptr) {
+        delete space->joinSem[slot];
+        space->joinSem[slot] = nullptr;
+    }
+
         space->nbThreads--;
         space->userLock->Release();
         delete a;
         return -1;
     }
-
+    //address space is correcctly set in Fork
     t->Fork(StartUserThread,(int) a);
-    return 0;
+    return slot;
 }
 
 void do_UserThreadExit() {
     AddrSpace *space = currentThread->space;
     ASSERT(space != NULL);
+    int tid = currentThread->userStackSlot;
 
     space->userLock->Acquire();
-    space->FreeUserStack(currentThread->userStackSlot);
+    if ((tid >= 0 && tid < MAX_USER_THREADS) && space->tidUsed[tid]) {
+        space->finished[tid] = true;
+        if (space->joinSem[tid] != nullptr) {
+            space->joinSem[tid]->V();
+        }
+    }
+    space->FreeUserStack(tid);
     space->nbThreads--;
     if (space->nbThreads == 0) {
         space->userThreadSem->V();
     }
     space->userLock->Release();
     currentThread->Finish();
+}
+
+int do_UserThreadJoin(int tid) {
+    AddrSpace *space = currentThread->space;
+    ASSERT(space != NULL);
+    if (!(tid >= 0 && tid < MAX_USER_THREADS) || tid == 0) return -1;
+    space->userLock->Acquire();
+    if (!space->tidUsed[tid]) {
+        space->userLock->Release();
+        return -1;
+    }
+    if (space->joined[tid]) {
+        space->userLock->Release();
+        return -1;
+    }
+
+    space->joined[tid] = true;
+    if (space->finished[tid]) {
+        space->tidUsed[tid] = false;
+        if (space->joinSem[tid] != nullptr) { delete space->joinSem[tid]; space->joinSem[tid] = nullptr; }
+        space->userLock->Release();
+        return 0;
+    }
+    Semaphore* sem = space->joinSem[tid];
+    space->userLock->Release();
+
+    sem->P();
+
+    space->userLock->Acquire();
+    space->tidUsed[tid] = false;
+    if (space->joinSem[tid] != nullptr) { delete space->joinSem[tid]; space->joinSem[tid] = nullptr; }
+    space->userLock->Release();
+
+    return 0;
+
 }

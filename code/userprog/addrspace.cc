@@ -62,9 +62,20 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     unsigned int i, size;
 
     userLock =new Lock("userLock");
-    userThreadSem = new Semaphore("userThreadSem", 1);
+    userThreadSem = new Semaphore("userThreadSem", 0);
     stackMap = new BitMap(MAX_USER_THREADS);
     stackMap->Mark(0);
+
+    for (i = 0; i < MAX_USER_THREADS; i++) {
+        tidUsed[i] = false;
+        finished[i] = false;
+        joined[i] = false;
+        joinSem[i] = nullptr;
+    }
+
+    tidUsed[0] = true;
+    joined[0] = true;
+
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) &&
         (WordToHost(noffH.noffMagic) == NOFFMAGIC))
@@ -126,6 +137,12 @@ AddrSpace::~AddrSpace() {
     // LB: Missing [] for delete
     // delete pageTable;
     delete[] pageTable;
+    for (int i = 0; i < MAX_USER_THREADS; i++) {
+        if (joinSem[i] != nullptr) {
+            delete joinSem[i];
+            joinSem[i] = nullptr;
+        }
+    }
     delete userThreadSem;
     delete userLock;
     delete stackMap;

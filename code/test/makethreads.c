@@ -7,6 +7,7 @@ void thread_func(void *arg) {
     for (i = 0; i < 10; i++) {
         PutChar(c);
     }
+    PutString("hi\n");
 
     UserThreadExit();
 }
@@ -17,9 +18,6 @@ int main() {
     UserThreadCreate(thread_func, (void *)'C');
 
 
-    /* Important: main must not Halt immediately */
-    /* Otherwise threads may be killed */
-
-    Halt(); /* never reached */
+    Halt(); 
     return 0;
 }
