@@ -124,6 +124,7 @@ class Thread {
     void SaveUserState();    // save user-level register state
     void RestoreUserState(); // restore user-level register state
 
+    int userStackSlot = -1;
     AddrSpace *space; // User code this thread is running.
 #endif
 };
