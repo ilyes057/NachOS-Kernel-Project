@@ -7,11 +7,13 @@
 #include "syscall.h"
 
 typedef struct UserThreadArgs {
-    int f;     // MIPS address of function
-    int arg;   // argument to pass
+    int f;
+    int arg;
     int sp;
     int slot;
-}UserThreadArgs_t;
+    int finish;   // adresse de __UserThreadFinish (user)
+} UserThreadArgs_t;
+
 
 static void StartUserThread(int f){
     
@@ -20,6 +22,7 @@ static void StartUserThread(int f){
     int arg = a->arg;  
     int sp=a->sp;
     int slot = a->slot; 
+    int finish = a->finish;   
     currentThread->userStackSlot = slot;
     delete a;
 
@@ -32,12 +35,13 @@ static void StartUserThread(int f){
     machine->WriteRegister(4, arg);
 
     machine->WriteRegister(StackReg, sp);
+    machine->WriteRegister(31, finish);      
     machine->Run();
     ASSERT(FALSE);//bcs Run must not return
 }
 
 
-int do_UserThreadCreate(int f, int arg){
+int do_UserThreadCreate(int f, int arg, int finish) {
     AddrSpace *space = currentThread->space;
     if (space == NULL) {
         return -1;
@@ -49,6 +53,7 @@ int do_UserThreadCreate(int f, int arg){
     }
     a->f   = f;
     a->arg = arg;
+    a->finish = finish;   
 
     space->userLock->Acquire();
     int slot, sp;

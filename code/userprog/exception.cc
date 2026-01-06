@@ -158,7 +158,8 @@ void ExceptionHandler(ExceptionType which) {
         case SC_UserThreadCreate: {
             int f =  machine->ReadRegister(4);
             int arg = machine->ReadRegister(5);
-            int ret = do_UserThreadCreate(f, arg);
+            int finish = machine->ReadRegister(6);  // adresse wrapper
+            int ret = do_UserThreadCreate(f, arg, finish);
             machine->WriteRegister(2, ret);
             break;
         }
