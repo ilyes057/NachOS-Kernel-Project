@@ -176,10 +176,12 @@ GetInt:
     syscall
     j $31
 	.end GetInt
+	
 	.global UserThreadCreate
 	.ent UserThreadCreate
 UserThreadCreate:
-	addiu $2,$0,SC_UserThreadCreate
+    la    $6, __UserThreadFinish   # 3e argument = adresse wrapper
+    addiu $2,$0,SC_UserThreadCreate
     syscall
     j $31
 	.end UserThreadCreate
@@ -200,6 +202,13 @@ UserThreadJoin:
     j $31
 	.end UserThreadJoin
 
+.globl  __UserThreadFinish
+.ent    __UserThreadFinish
+__UserThreadFinish:
+    jal     UserThreadExit     # appel du syscall
+    nop
+	.end __UserThreadFinish
+	
 /* dummy function to keep gcc happy */
         .globl  __main
         .ent    __main

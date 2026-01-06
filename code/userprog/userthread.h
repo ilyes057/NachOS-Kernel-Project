@@ -4,7 +4,7 @@
 
 #include "copyright.h"
 
-extern int do_UserThreadCreate(int f, int arg);
+extern int do_UserThreadCreate(int f, int arg, int finish);
 extern void do_UserThreadExit();
 extern int do_UserThreadJoin(int tid);
 
