@@ -154,7 +154,7 @@ void ExceptionHandler(ExceptionType which) {
             machine->WriteMem(userPtr, 4, value);
             break;
         }
-        #ifdef STEP3
+        #if defined(STEP3) || defined(STEP4)
         case SC_UserThreadCreate: {
             int f =  machine->ReadRegister(4);
             int arg = machine->ReadRegister(5);

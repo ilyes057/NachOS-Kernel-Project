@@ -7,7 +7,7 @@
 
 #include "system.h"
 #include "copyright.h"
-
+#include "../userprog/frameprovider.h"
 // This defines *all* of the global data structures used by Nachos.
 // These are all initialized and de-allocated by this file.
 
@@ -19,6 +19,8 @@ Statistics *stats;           // performance metrics
 Timer *timer;
                 // the hardware timer device,
                              // for invoking context switches
+FrameProvider *frameProvider = nullptr;
+
 #ifdef FILESYS_NEEDED
 FileSystem *fileSystem;
 #endif
@@ -148,6 +150,10 @@ void Initialize(int argc, char **argv) {
     synchconsole = new SynchConsole(NULL, NULL);
 #endif
 
+#ifdef STEP4
+    frameProvider = new FrameProvider(NumPhysPages);
+#endif
+
 #ifdef FILESYS
     synchDisk = new SynchDisk("DISK");
 #endif
@@ -171,9 +177,15 @@ void Cleanup() {
     delete postOffice;
 #endif
 
+#ifdef STEP4
+    delete frameProvider;
+    frameProvider = nullptr;
+#endif
+
 #ifdef USER_PROGRAM
     delete synchconsole;
     delete machine;
+
 #endif
 
 #ifdef FILESYS_NEEDED

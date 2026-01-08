@@ -19,8 +19,27 @@
 #include "copyright.h"
 #include "noff.h"
 #include "system.h"
-
+#ifdef STEP4
+#include "frameprovider.h"
+#endif
 #include <strings.h> /* for bzero */
+
+
+//----------------------------------------------------------------------
+// AddrSpace::AddrSpace
+//      Create an address space to run a user program.
+//      Load the program from a file "executable", and set everything
+//      up so that we can start executing user instructions.
+//
+//      Assumes that the object code file is in NOFF format.
+//
+//      First, set up the translation from program memory to physical
+//      memory.  For now, this is really simple (1:1), since we are
+//      only uniprogramming, and we have a single unsegmented page table
+//
+//      "executable" is the file containing the object code to load into memory
+//----------------------------------------------------------------------
+#ifdef STEP4
 
 //----------------------------------------------------------------------
 // SwapHeader
@@ -41,22 +60,146 @@ static void SwapHeader(NoffHeader *noffH) {
     noffH->uninitData.virtualAddr = WordToHost(noffH->uninitData.virtualAddr);
     noffH->uninitData.inFileAddr = WordToHost(noffH->uninitData.inFileAddr);
 }
+static void ReadAtVirtual(OpenFile *executable,
+                          int virtualaddr,
+                          int numBytes,
+                          int position,
+                          TranslationEntry *pageTable,
+                          unsigned numPages){
+    ASSERT(executable != nullptr);
+    ASSERT(pageTable != nullptr);
+    ASSERT(numBytes >= 0);
+    ASSERT(numPages > 0);
+    if (numBytes==0)return;
+    char *tmp = new char[numBytes];
+    int bytesRead = executable->ReadAt(tmp, numBytes, position);
+    if (bytesRead <= 0) {
+        delete[] tmp;
+        return;
+    }
+    TranslationEntry *oldPT = machine->pageTable;
+    unsigned oldPTSize = machine->pageTableSize;
+
+    machine->pageTable = pageTable;
+    machine->pageTableSize = numPages;
+
+    for (int i = 0; i < bytesRead; i++) {
+        int value = (unsigned char)tmp[i];
+        bool ok = machine->WriteMem(virtualaddr + i, 1, value);
+        ASSERT(ok);
+    }
+    machine->pageTable = oldPT;
+    machine->pageTableSize = oldPTSize;
+
+    delete[] tmp;
+}
+
+AddrSpace::AddrSpace(OpenFile *executable) {
+    NoffHeader noffH;
+    unsigned int i, size;
+
+    userLock =new Lock("userLock");
+    userThreadSem = new Semaphore("userThreadSem", 0);
+    stackMap = new BitMap(MAX_USER_THREADS);
+    stackMap->Mark(0);
+
+    for (i = 0; i < MAX_USER_THREADS; i++) {
+        tidUsed[i] = false;
+        finished[i] = false;
+        joined[i] = false;
+        joinSem[i] = nullptr;
+    }
+
+    tidUsed[0] = true;
+    joined[0] = true;
+
+    executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
+    if ((noffH.noffMagic != NOFFMAGIC) &&
+        (WordToHost(noffH.noffMagic) == NOFFMAGIC))
+        SwapHeader(&noffH);
+    ASSERT(noffH.noffMagic == NOFFMAGIC);
+
+    // how big is address space?
+    size = noffH.code.size + noffH.initData.size + noffH.uninitData.size +
+           UserStackSize * MAX_USER_THREADS; // we need to increase the size
+    // to leave room for the stack
+    numPages = divRoundUp(size, PageSize);
+    size = numPages * PageSize;
+
+    ASSERT(numPages <= NumPhysPages); // check we're not trying
+    // to run anything too big --
+    // at least until we have
+    // virtual memory
+
+    DEBUG('a', "Initializing address space, num pages %d, size %d\n", numPages,
+          size);
+    // first, set up the translation
+    pageTable = new TranslationEntry[numPages];
+    for (i = 0; i < numPages; i++) {
+        int frame = frameProvider->GetEmptyFrame();
+        ASSERT(frame >= 0);
+        pageTable[i].virtualPage = i; // for now, virtual page # = phys page #
+        pageTable[i].physicalPage = frame;
+        pageTable[i].valid = TRUE;
+        pageTable[i].use = FALSE;
+        pageTable[i].dirty = FALSE;
+        pageTable[i].readOnly = FALSE; // if the code segment was entirely on
+                                       // a separate page, we could set its
+                                       // pages to be read-only
+    }
+
+    // zero out the entire address space, to zero the unitialized data segment
+    // and the stack segment //deleted because get empty frame alreadyy gives a zeroed frame
+    
+
+    // then, copy in the code and data segments into memory
+    if (noffH.code.size > 0) {
+        DEBUG('a', "Initializing code segment, at 0x%x, size %d\n",
+              noffH.code.virtualAddr, noffH.code.size);
+        ReadAtVirtual(executable,
+                  noffH.code.virtualAddr,
+                  noffH.code.size,
+                  noffH.code.inFileAddr,
+                  pageTable, numPages);
+    }
+    if (noffH.initData.size > 0) {
+        DEBUG('a', "Initializing data segment, at 0x%x, size %d\n",
+              noffH.initData.virtualAddr, noffH.initData.size);
+        ReadAtVirtual(executable,
+                  noffH.initData.virtualAddr,
+                  noffH.initData.size,
+                  noffH.initData.inFileAddr,
+                  pageTable, numPages);
+    }
+}
 
 //----------------------------------------------------------------------
-// AddrSpace::AddrSpace
-//      Create an address space to run a user program.
-//      Load the program from a file "executable", and set everything
-//      up so that we can start executing user instructions.
-//
-//      Assumes that the object code file is in NOFF format.
-//
-//      First, set up the translation from program memory to physical
-//      memory.  For now, this is really simple (1:1), since we are
-//      only uniprogramming, and we have a single unsegmented page table
-//
-//      "executable" is the file containing the object code to load into memory
+// AddrSpace::~AddrSpace
+//      Dealloate an address space.  Nothing for now!
+//----------------------------------------------------------------------
+#endif
+
+#if  defined(STEP3) || defined(STEP2)
+
+//----------------------------------------------------------------------
+// SwapHeader
+//      Do little endian to big endian conversion on the bytes in the
+//      object file header, in case the file was generated on a little
+//      endian machine, and we're now running on a big endian machine.
 //----------------------------------------------------------------------
 
+static void SwapHeader(NoffHeader *noffH) {
+    noffH->noffMagic = WordToHost(noffH->noffMagic);
+    noffH->code.size = WordToHost(noffH->code.size);
+    noffH->code.virtualAddr = WordToHost(noffH->code.virtualAddr);
+    noffH->code.inFileAddr = WordToHost(noffH->code.inFileAddr);
+    noffH->initData.size = WordToHost(noffH->initData.size);
+    noffH->initData.virtualAddr = WordToHost(noffH->initData.virtualAddr);
+    noffH->initData.inFileAddr = WordToHost(noffH->initData.inFileAddr);
+    noffH->uninitData.size = WordToHost(noffH->uninitData.size);
+    noffH->uninitData.virtualAddr = WordToHost(noffH->uninitData.virtualAddr);
+    noffH->uninitData.inFileAddr = WordToHost(noffH->uninitData.inFileAddr);
+}
 AddrSpace::AddrSpace(OpenFile *executable) {
     NoffHeader noffH;
     unsigned int i, size;
@@ -127,16 +270,21 @@ AddrSpace::AddrSpace(OpenFile *executable) {
                            noffH.initData.size, noffH.initData.inFileAddr);
     }
 }
-
-//----------------------------------------------------------------------
-// AddrSpace::~AddrSpace
-//      Dealloate an address space.  Nothing for now!
-//----------------------------------------------------------------------
-
+#endif
 AddrSpace::~AddrSpace() {
     // LB: Missing [] for delete
     // delete pageTable;
     delete[] pageTable;
+    #ifdef STEP4
+    if (pageTable != nullptr) {
+        for (unsigned i = 0; i < numPages; i++) {
+            if (pageTable[i].valid) {
+                frameProvider->ReleaseFrame(pageTable[i].physicalPage);
+                pageTable[i].valid = FALSE;
+            }
+        }
+    }
+    #endif
     for (int i = 0; i < MAX_USER_THREADS; i++) {
         if (joinSem[i] != nullptr) {
             delete joinSem[i];
