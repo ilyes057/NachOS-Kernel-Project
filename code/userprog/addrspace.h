@@ -18,11 +18,23 @@
 #include "translate.h"
 #include "bitmap.h"
 
+
 class Lock;
 class Semaphore;
+class List;
 
-#define UserStackSize 256 // increase this as necessary!
-#define MAX_USER_THREADS 6
+#define OneUserStackSize 256 // increase this as necessary!
+#define MAX_USER_THREADS 20
+
+
+struct ThreadState {
+    bool used;
+    bool finished;
+    bool joined;
+    Semaphore* sem;
+
+    ThreadState() : used(false), finished(false), joined(false), sem(0) {}
+};
 
 class AddrSpace {
   public:
@@ -43,18 +55,24 @@ class AddrSpace {
 
     int AllocateUserStack(int* outSlot, int* outSp);
     void FreeUserStack(int slot);
-    bool tidUsed[MAX_USER_THREADS];
-    bool finished[MAX_USER_THREADS];
-    bool joined[MAX_USER_THREADS];
-    Semaphore* joinSem[MAX_USER_THREADS];
+    int AllocTid();
+    ThreadState* GetRec(int tid);
+    void FreeTid(int tid);
 
   private:
+    void UpgradeTidCapacity(int tid);
+
     TranslationEntry *pageTable; // Assume linear page table translation
     // for now!
     unsigned int numPages; // Number of pages in the virtual
     // address space
     int stackStartMain;
     BitMap *stackMap;
+
+    ThreadState* tidTable;
+    int tidCap;
+    int nextTid;
+    List* freeTids;
 };
 
 #endif // ADDRSPACE_H
