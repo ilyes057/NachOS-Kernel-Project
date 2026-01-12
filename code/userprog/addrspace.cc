@@ -25,6 +25,9 @@
 #include <strings.h> /* for bzero */
 
 
+static inline void* IntToVoid(int x) { return (void*)(long)(unsigned)x; }
+static inline int VoidToInt(void* p) { return (int)(long)p; }
+
 //----------------------------------------------------------------------
 // AddrSpace::AddrSpace
 //      Create an address space to run a user program.
@@ -103,15 +106,21 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     stackMap = new BitMap(MAX_USER_THREADS);
     stackMap->Mark(0);
 
-    for (i = 0; i < MAX_USER_THREADS; i++) {
-        tidUsed[i] = false;
-        finished[i] = false;
-        joined[i] = false;
-        joinSem[i] = nullptr;
+    tidCap = 32;
+    tidTable = new ThreadState[tidCap];
+    for (int k = 0; k < tidCap; k++) {
+        tidTable[k].used = false;
+        tidTable[k].finished = false;
+        tidTable[k].joined = false;
+        tidTable[k].sem = nullptr;
     }
 
-    tidUsed[0] = true;
-    joined[0] = true;
+    nextTid = 1;
+    freeTids = new List;
+    tidTable[0].used = true;
+    tidTable[0].finished = false;
+    tidTable[0].joined = true;
+    tidTable[0].sem = nullptr;
 
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) &&
@@ -121,8 +130,7 @@ AddrSpace::AddrSpace(OpenFile *executable) {
 
     // how big is address space?
     size = noffH.code.size + noffH.initData.size + noffH.uninitData.size +
-           UserStackSize * MAX_USER_THREADS; // we need to increase the size
-    // to leave room for the stack
+           OneUserStackSize * MAX_USER_THREADS;
     numPages = divRoundUp(size, PageSize);
     size = numPages * PageSize;
 
@@ -135,6 +143,7 @@ AddrSpace::AddrSpace(OpenFile *executable) {
           size);
     // first, set up the translation
     pageTable = new TranslationEntry[numPages];
+    printf("[AddrSpace] numPages=%u, availFrames=%d\n", numPages, frameProvider->NumAvailFrame());
     for (i = 0; i < numPages; i++) {
         int frame = frameProvider->GetEmptyFrame();
         ASSERT(frame >= 0);
@@ -209,15 +218,21 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     stackMap = new BitMap(MAX_USER_THREADS);
     stackMap->Mark(0);
 
-    for (i = 0; i < MAX_USER_THREADS; i++) {
-        tidUsed[i] = false;
-        finished[i] = false;
-        joined[i] = false;
-        joinSem[i] = nullptr;
+    tidCap = 32;
+    tidTable = new ThreadState[tidCap];
+    for (int k = 0; k < tidCap; k++) {
+        tidTable[k].used = false;
+        tidTable[k].finished = false;
+        tidTable[k].joined = false;
+        tidTable[k].sem = nullptr;
     }
 
-    tidUsed[0] = true;
-    joined[0] = true;
+    nextTid = 1;
+    freeTids = new List;
+    tidTable[0].used = true;
+    tidTable[0].finished = false;
+    tidTable[0].joined = true;
+    tidTable[0].sem = nullptr;
 
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) &&
@@ -227,7 +242,7 @@ AddrSpace::AddrSpace(OpenFile *executable) {
 
     // how big is address space?
     size = noffH.code.size + noffH.initData.size + noffH.uninitData.size +
-           UserStackSize * MAX_USER_THREADS; // we need to increase the size
+           OneUserStackSize * MAX_USER_THREADS; // we need to increase the size
     // to leave room for the stack
     numPages = divRoundUp(size, PageSize);
     size = numPages * PageSize;
@@ -272,9 +287,6 @@ AddrSpace::AddrSpace(OpenFile *executable) {
 }
 #endif
 AddrSpace::~AddrSpace() {
-    // LB: Missing [] for delete
-    // delete pageTable;
-    delete[] pageTable;
     #ifdef STEP4
     if (pageTable != nullptr) {
         for (unsigned i = 0; i < numPages; i++) {
@@ -285,24 +297,36 @@ AddrSpace::~AddrSpace() {
         }
     }
     #endif
-    for (int i = 0; i < MAX_USER_THREADS; i++) {
-        if (joinSem[i] != nullptr) {
-            delete joinSem[i];
-            joinSem[i] = nullptr;
+    // LB: Missing [] for delete
+    // delete pageTable;
+    delete[] pageTable;
+    pageTable = nullptr;
+    if (tidTable != nullptr) {
+        for (int i = 0; i < tidCap; i++) {
+            if (tidTable[i].sem != nullptr) {
+                delete tidTable[i].sem;
+                tidTable[i].sem = nullptr;
+            }
         }
+        delete[] tidTable;
+        tidTable = nullptr;
+    }
+
+    if (freeTids != nullptr) {
+        delete freeTids;
+        freeTids = nullptr;
     }
     delete userThreadSem;
     delete userLock;
     delete stackMap;
     // End of modification
 }
-
 int AddrSpace::AllocateUserStack(int* outSlot, int* outSp) {
     int slot = stackMap->Find();
     if (slot < 0) {
         return -1;
     }
-    int sp = stackStartMain - slot * UserStackSize;
+    int sp = stackStartMain - slot * OneUserStackSize;
     sp &= ~0x3; // keep word alignment
 
     *outSlot = slot;
@@ -372,4 +396,74 @@ void AddrSpace::SaveState() {}
 void AddrSpace::RestoreState() {
     machine->pageTable = pageTable;
     machine->pageTableSize = numPages;
+}
+
+
+void AddrSpace::UpgradeTidCapacity(int tid) {
+    if (tid < tidCap) return;
+
+    int newCap = tidCap;
+    while (newCap <= tid) newCap *= 2;
+
+    ThreadState* newTab = new ThreadState[newCap];
+    for (int i = 0; i < newCap; i++) {
+            newTab[i].used = false;
+            newTab[i].finished = false;
+            newTab[i].joined = false;
+            newTab[i].sem = nullptr;
+        }
+
+    for (int i = 0; i < tidCap; i++) newTab[i] = tidTable[i];
+
+    delete[] tidTable;
+    tidTable = newTab;
+    tidCap = newCap;
+}
+ThreadState* AddrSpace::GetRec(int tid) {
+    if (tid < 0 || tid >= tidCap) return nullptr;
+    return &tidTable[tid];
+}
+int AddrSpace::AllocTid() {
+    int tid;
+    //on recup un tid dans la free list si un tid est pret a etre reutilise, on met null si non
+    void* v = (freeTids != nullptr) ? freeTids->Remove() : nullptr;
+    if (v != nullptr) {
+        //reutilisation d'un tid
+        tid = VoidToInt(v);
+    } else {
+        //nouveau tid
+        tid = nextTid++;
+    }
+    //on agrandit le tableau si necessaire
+    UpgradeTidCapacity(tid);
+
+    //fill the threads table record
+    ThreadState* r = &tidTable[tid];
+    r->used = true;
+    r->finished = false;
+    r->joined = false;
+    r->sem = new Semaphore("joinSem", 0);
+
+    return tid;
+}
+
+void AddrSpace::FreeTid(int tid) {
+    if (tid <= 0) return; // ne recycle pas 0
+    if (tid < 0 || tid >= tidCap) return;
+
+    ThreadState* r = &tidTable[tid];
+    if (r == nullptr || !r->used) return;
+
+    r->used = false;
+    r->finished = false;
+    r->joined = false;
+
+    if (r->sem != nullptr) {
+        delete r->sem;
+        r->sem = nullptr;
+    }
+
+    if (freeTids != nullptr) {
+        freeTids->Append(IntToVoid(tid));
+    }
 }
