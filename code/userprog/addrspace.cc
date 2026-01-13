@@ -137,13 +137,18 @@ AddrSpace::AddrSpace(OpenFile *executable) {
         SwapHeader(&noffH);
     ASSERT(noffH.noffMagic == NOFFMAGIC);
 
-    // how big is address space?
-    size = noffH.code.size + noffH.initData.size + noffH.uninitData.size +
-           OneUserStackSize * MAX_USER_THREADS; // we need to increase the size
-    // to leave room for the stack
-    numPages = divRoundUp(size, PageSize);
-    size = numPages * PageSize;
+    unsigned staticSize = noffH.code.size + noffH.initData.size + noffH.uninitData.size;
+    unsigned staticPages = divRoundUp(staticSize, PageSize);
 
+    unsigned stackSize = OneUserStackSize * MAX_USER_THREADS;
+    unsigned stackPages = divRoundUp(stackSize, PageSize);    unsigned heapPages = 0;
+    if (NumPhysPages > staticPages + stackPages) {
+        heapPages = NumPhysPages - staticPages - stackPages;
+    }
+    numPages = staticPages + heapPages + stackPages;
+    size = numPages * PageSize;
+    brk = staticPages;
+    heapLimit = staticPages + heapPages;
     ASSERT(numPages <= NumPhysPages); // check we're not trying
     // to run anything too big --
     // at least until we have
@@ -154,21 +159,26 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     // first, set up the translation
     pageTable = new TranslationEntry[numPages];
     for (i = 0; i < numPages; i++) {
-        #ifndef STEP4
-        pageTable[i].virtualPage = i; // for now, virtual page # = phys page #
-        pageTable[i].physicalPage = i;
-        #else
-        int frame = frameProvider->GetEmptyFrame();
-        ASSERT(frame >= 0);
-        pageTable[i].virtualPage = i; // for now, virtual page # = phys page #
-        pageTable[i].physicalPage = frame;
-        #endif
-        pageTable[i].valid = TRUE;
+        pageTable[i].virtualPage = i;
         pageTable[i].use = FALSE;
         pageTable[i].dirty = FALSE;
-        pageTable[i].readOnly = FALSE; // if the code segment was entirely on
-                                       // a separate page, we could set its
-                                       // pages to be read-only
+        pageTable[i].readOnly = FALSE;
+        #ifndef STEP4
+        pageTable[i].physicalPage = i;
+        pageTable[i].valid = TRUE;
+        #else
+        bool isStatic = (i < brk);
+        bool isStack  = (i >= heapLimit);
+        if (isStatic || isStack){
+            int frame = frameProvider->GetEmptyFrame();
+            ASSERT(frame >= 0);
+            pageTable[i].physicalPage = frame;
+            pageTable[i].valid = TRUE;
+        }else{
+            pageTable[i].physicalPage = -1;
+            pageTable[i].valid = FALSE;
+        }
+        #endif
     }
 
     // zero out the entire address space, to zero the unitialized data segment
@@ -403,3 +413,52 @@ void AddrSpace::FreeTid(int tid) {
         freeTids->Append(IntToVoid(tid));
     }
 }
+#ifdef STEP4
+void* AddrSpace::Sbrk(unsigned int n) {
+    unsigned int oldBrk = brk;
+
+    if (n == 0) {
+        return IntToVoid((int)(oldBrk * PageSize));
+    }
+
+    if (oldBrk + n > heapLimit) {
+        return IntToVoid(-1);
+    }
+    for (unsigned i = 0; i < n; i++) {
+        unsigned vpn = oldBrk + i;
+        if (pageTable[vpn].valid) {
+            return IntToVoid(-1);
+        }
+    }
+
+    unsigned int allocated = 0;
+    for (; allocated < n; allocated++) {
+        unsigned int vpn = oldBrk + allocated;
+
+        int frame = frameProvider->GetEmptyFrame();
+        if (frame < 0) {
+            for (unsigned int j = 0; j < allocated; j++) {
+                unsigned int rvpn = oldBrk + j;
+                int rframe = pageTable[rvpn].physicalPage;
+                if (rframe >= 0) {
+                    frameProvider->ReleaseFrame(rframe);
+                }
+                pageTable[rvpn].physicalPage = -1;
+                pageTable[rvpn].valid = FALSE;
+                pageTable[rvpn].use = FALSE;
+                pageTable[rvpn].dirty = FALSE;
+                pageTable[rvpn].readOnly = FALSE;
+            }
+            return IntToVoid(-1);
+        }
+
+        pageTable[vpn].physicalPage = frame;
+        pageTable[vpn].valid = TRUE;
+        pageTable[vpn].use = FALSE;
+        pageTable[vpn].dirty = FALSE;
+        pageTable[vpn].readOnly = FALSE;
+    }
+    brk = oldBrk + n;
+    return IntToVoid((int)(oldBrk * PageSize));
+}
+#endif

@@ -43,6 +43,7 @@
 #define SC_SemDestroy 22
 #define SC_P 23
 #define SC_V 24
+#define SC_SBRK 25
 
 #ifdef IN_USER_MODE
 
@@ -151,6 +152,7 @@ int  SemCreate(int initialValue);
 void SemDestroy(int semId);
 void P(int semId);
 void V(int semId);
+void* Sbrk(unsigned int n);
 
 #endif // IN_USER_MODE
 

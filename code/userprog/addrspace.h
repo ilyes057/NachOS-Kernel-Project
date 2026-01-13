@@ -67,6 +67,7 @@ class AddrSpace {
     SemState* semTable;
     int nextSemId;
     List* freeSemIds;
+    void* Sbrk(unsigned int n);
 
   private:
     void UpgradeTidCapacity(int tid);
@@ -82,6 +83,8 @@ class AddrSpace {
     int tidCap;
     int nextTid;
     List* freeTids;
+    unsigned int brk;
+    unsigned int heapLimit;
 };
 
 #endif // ADDRSPACE_H

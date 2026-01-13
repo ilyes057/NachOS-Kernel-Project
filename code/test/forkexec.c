@@ -2,8 +2,7 @@
 
 int main()
 {
-    exit
-    forkexec("userpages0");
-    forkexec()
+    ForkExec("userpages0");
+    ForkExec("userpages1");
     return 0;
 }

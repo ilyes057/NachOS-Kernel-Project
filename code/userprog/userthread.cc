@@ -144,3 +144,20 @@ int do_UserThreadJoin(int tid) {
 
     return 0;
 }
+
+#ifdef STEP4
+int do_sbrk(int n){
+    if (n < 0) {
+        return -1;
+    }
+    AddrSpace *space = currentThread->space;
+    if (space == nullptr) {
+        return -1;
+    }
+    space->userLock->Acquire();
+    void* p = space->Sbrk((unsigned int)n);
+    space->userLock->Release();
+    if (p == (void*)-1) return -1;
+    return (int)(long)p;
+}
+#endif

@@ -251,6 +251,16 @@ V:
     j     $31
     nop
     .end  V
+
+    .globl SBRK
+    .ent   SBRK
+SBRK:
+    addiu $2,$0,SC_SBRK
+    syscall
+    j     $31
+    nop
+    .end  SBRK
+	
 /* dummy function to keep gcc happy */
         .globl  __main
         .ent    __main
