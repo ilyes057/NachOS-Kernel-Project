@@ -35,6 +35,10 @@ struct ThreadState {
 
     ThreadState() : used(false), finished(false), joined(false), sem(0) {}
 };
+struct SemState {
+    bool used;
+    Semaphore* sem;
+};
 
 class AddrSpace {
   public:
@@ -49,7 +53,7 @@ class AddrSpace {
     void SaveState();    // Save/restore address space-specific
     void RestoreState(); // info on a context switch
 
-    Lock *userLock;
+    Lock *userLock,*semListLock;
     Semaphore *userThreadSem;
     int nbThreads=0;
 
@@ -58,6 +62,11 @@ class AddrSpace {
     int AllocTid();
     ThreadState* GetRec(int tid);
     void FreeTid(int tid);
+
+    unsigned int semCap;
+    SemState* semTable;
+    int nextSemId;
+    List* freeSemIds;
 
   private:
     void UpgradeTidCapacity(int tid);

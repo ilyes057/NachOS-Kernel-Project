@@ -122,6 +122,15 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     tidTable[0].joined = true;
     tidTable[0].sem = nullptr;
 
+    semCap = 32;
+    semTable = new SemState[semCap];
+    for (i = 0; i < semCap; i++) {
+        semTable[i].used = false;
+        semTable[i].sem = nullptr;
+    }
+    nextSemId = 1;
+    freeSemIds = new List;
+
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) &&
         (WordToHost(noffH.noffMagic) == NOFFMAGIC))
@@ -234,6 +243,15 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     tidTable[0].joined = true;
     tidTable[0].sem = nullptr;
 
+    semCap = 32;
+    semTable = new SemState[semCap];
+    for (i = 0; i < semCap; i++) {
+        semTable[i].used = false;
+        semTable[i].sem = nullptr;
+    }
+    nextSemId = 1;
+    freeSemIds = new List;
+
     executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
     if ((noffH.noffMagic != NOFFMAGIC) &&
         (WordToHost(noffH.noffMagic) == NOFFMAGIC))
@@ -315,6 +333,20 @@ AddrSpace::~AddrSpace() {
     if (freeTids != nullptr) {
         delete freeTids;
         freeTids = nullptr;
+    }
+    if (semTable != nullptr) {
+        for (unsigned int i = 0; i < semCap; i++) {
+            if (semTable[i].sem != nullptr) {
+                delete semTable[i].sem;
+                semTable[i].sem = nullptr;
+            }
+        }
+        delete[] semTable;
+        semTable = nullptr;
+    }
+    if (freeSemIds != nullptr) {
+        delete freeSemIds;
+        freeSemIds = nullptr;
     }
     delete userThreadSem;
     delete userLock;
