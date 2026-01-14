@@ -17,7 +17,7 @@
 # Note that files declared into USERPROG_LIBS do not need to be
 # redeclared here
 # All other C files will be compiled as a userspace nachos program
-USERPROG_NOPROGRAM=
+USERPROG_NOPROGRAM=mem.c
 
 # source files that must be included in all userspace nachos program
 # Note: as for USERPROG_NOPROGRAM, they won't be compiled into a
@@ -38,6 +38,9 @@ USERPROG_LIBS=start.S libgcc.c
 # USERPROG_NOPROGRAM    = bigtest_extra.c
 # USERPROG_LIBS         = start.S libgcc.c nachos-libc.c
 # bigtest_EXTRA_SOURCES = bigtest_extra.c
+
+# memTest needs the allocator implementation
+memTest_EXTRA_SOURCES=mem.c
 
 
 ###########################################################################
@@ -93,4 +96,5 @@ $(eval $(call define-flavor,step4,userprog filesys-stub,synchconsole.cc userthre
 #     synchconsole.cc userthread.cc))
 # $(eval $(call define-flavor,final,userprog filesys network,\
 #     synchconsole.cc userthread.cc))
-
+$(eval $(call define-flavor,network,userprog filesys network,\
+    synchconsole.cc usersem.cc))
