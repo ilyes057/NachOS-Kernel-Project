@@ -39,7 +39,13 @@
 #define SC_UserThreadExit 18
 #define SC_UserThreadJoin 19
 #define SC_ForkExec 20
-#define SC_Wait 21
+#define SC_SemCreate 21
+#define SC_SemDestroy 22
+#define SC_P 23
+#define SC_V 24
+#define SC_SBRK 25
+#define SC_Wait 26
+
 #ifdef IN_USER_MODE
 
 // LB: This part is read only on compiling the test/*.c files.
@@ -144,6 +150,11 @@ void UserThreadExit();
 int UserThreadJoin(int tid);
 int ForkExec(char *s);
 int Wait(int pid);
+int  SemCreate(int initialValue);
+void SemDestroy(int semId);
+void P(int semId);
+void V(int semId);
+void* Sbrk(unsigned int n);
 
 #endif // IN_USER_MODE
 

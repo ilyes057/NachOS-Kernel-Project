@@ -25,6 +25,7 @@
 #include "syscall.h"
 #include "system.h"
 #include "userthread.h"
+#include "usersem.h"
 #include "process.h"
 
 //----------------------------------------------------------------------
@@ -195,7 +196,35 @@ void ExceptionHandler(ExceptionType which) {
             break;
         }
         #endif
-
+        case SC_SemCreate:{
+            int init = machine->ReadRegister(4);
+            int id = do_SemCreate(init);
+            machine->WriteRegister(2, id);
+            break;
+        }
+        case SC_SemDestroy:{
+            int id = machine->ReadRegister(4);
+            do_SemDestroy(id);
+            break;
+        }
+        case SC_P:{
+            int id = machine->ReadRegister(4);
+            do_SemP(id);
+            break;
+        }
+        case SC_V:{
+            int id = machine->ReadRegister(4);
+            do_SemV(id);
+            break;
+        }
+        #ifdef STEP4
+        case SC_SBRK:{
+            int n = machine->ReadRegister(4);
+            int addr = do_sbrk(n);
+            machine->WriteRegister(2, addr);
+            break;
+        }
+        #endif
 
         default: {
             printf("Unexpected user mode exception %d %d\n", which, type);
