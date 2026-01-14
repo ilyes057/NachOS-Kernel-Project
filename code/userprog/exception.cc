@@ -115,7 +115,7 @@ void ExceptionHandler(ExceptionType which) {
             break;
         }
         case SC_Exit: {
-            #ifndef STEP4
+            #if !defined(STEP4) && !defined(STEP5)
                 int x = machine->ReadRegister(4);
                 DEBUG('r', "Shutdown, exit called with status %d.\n", x);
                 interrupt->Halt();
@@ -162,7 +162,7 @@ void ExceptionHandler(ExceptionType which) {
             machine->WriteMem(userPtr, 4, value);
             break;
         }
-        #if defined(STEP3) || defined(STEP4)
+        #if defined(STEP3) || defined(STEP4) || defined(STEP5)
         case SC_UserThreadCreate: {
             int f =  machine->ReadRegister(4);
             int arg = machine->ReadRegister(5);
@@ -181,21 +181,6 @@ void ExceptionHandler(ExceptionType which) {
             machine->WriteRegister(2, ret);
             break;
         }
-        #endif
-        #ifdef STEP4
-        case SC_ForkExec: {
-            int exec = machine->ReadRegister(4);   
-            int ret = do_ForkExec(exec);         
-            machine->WriteRegister(2, ret);
-            break;
-        }
-        case SC_Wait :{
-            int pid = machine->ReadRegister(4);
-            int result = do_Wait(pid);
-            machine->WriteRegister(2, result);
-            break;
-        }
-        #endif
         case SC_SemCreate:{
             int init = machine->ReadRegister(4);
             int id = do_SemCreate(init);
@@ -217,7 +202,20 @@ void ExceptionHandler(ExceptionType which) {
             do_SemV(id);
             break;
         }
-        #ifdef STEP4
+        #endif
+        #if defined(STEP4) || defined(STEP5)
+        case SC_ForkExec: {
+            int exec = machine->ReadRegister(4);   
+            int ret = do_ForkExec(exec);         
+            machine->WriteRegister(2, ret);
+            break;
+        }
+        case SC_Wait :{
+            int pid = machine->ReadRegister(4);
+            int result = do_Wait(pid);
+            machine->WriteRegister(2, result);
+            break;
+        }
         case SC_SBRK:{
             int n = machine->ReadRegister(4);
             int addr = do_sbrk(n);

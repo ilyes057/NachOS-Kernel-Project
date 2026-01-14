@@ -19,7 +19,7 @@
 #include "copyright.h"
 #include "noff.h"
 #include "system.h"
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
 #include "frameprovider.h"
 #endif
 #include <strings.h> /* for bzero */
@@ -42,7 +42,7 @@ static inline int VoidToInt(void* p) { return (int)(long)p; }
 //
 //      "executable" is the file containing the object code to load into memory
 //----------------------------------------------------------------------
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
 static void ReadAtVirtual(OpenFile *executable,
                           int virtualaddr,
                           int numBytes,
@@ -163,7 +163,7 @@ AddrSpace::AddrSpace(OpenFile *executable) {
         pageTable[i].use = FALSE;
         pageTable[i].dirty = FALSE;
         pageTable[i].readOnly = FALSE;
-        #ifndef STEP4
+        #if !defined(STEP4) && !defined(STEP5)
         pageTable[i].physicalPage = i;
         pageTable[i].valid = TRUE;
         #else
@@ -183,14 +183,14 @@ AddrSpace::AddrSpace(OpenFile *executable) {
 
     // zero out the entire address space, to zero the unitialized data segment
     // and the stack segment
-    #ifndef STEP4
+    #if !defined(STEP4) && !defined(STEP5)
     bzero(machine->mainMemory, size);
     #endif
     // then, copy in the code and data segments into memory
     if (noffH.code.size > 0) {
         DEBUG('a', "Initializing code segment, at 0x%x, size %d\n",
               noffH.code.virtualAddr, noffH.code.size);
-        #ifndef STEP4
+        #if !defined(STEP4) && !defined(STEP5)
         executable->ReadAt(&(machine->mainMemory[noffH.code.virtualAddr]),
                            noffH.code.size, noffH.code.inFileAddr);
         #else
@@ -204,7 +204,7 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     if (noffH.initData.size > 0) {
         DEBUG('a', "Initializing data segment, at 0x%x, size %d\n",
               noffH.initData.virtualAddr, noffH.initData.size);
-        #ifndef STEP4
+        #if !defined(STEP4) && !defined(STEP5)
         executable->ReadAt(&(machine->mainMemory[noffH.initData.virtualAddr]),
                            noffH.initData.size, noffH.initData.inFileAddr);
         #else
@@ -219,7 +219,7 @@ AddrSpace::AddrSpace(OpenFile *executable) {
 }
 
 AddrSpace::~AddrSpace() {
-    #ifdef STEP4
+    #if defined(STEP4) || defined(STEP5)
     if (pageTable != nullptr) {
         for (unsigned i = 0; i < numPages; i++) {
             if (pageTable[i].valid) {
@@ -413,7 +413,7 @@ void AddrSpace::FreeTid(int tid) {
         freeTids->Append(IntToVoid(tid));
     }
 }
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
 void* AddrSpace::Sbrk(unsigned int n) {
     unsigned int oldBrk = brk;
 

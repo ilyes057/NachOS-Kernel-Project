@@ -51,7 +51,7 @@ extern Statistics *stats;           // performance metrics
 extern Timer *timer;                // the hardware alarm clock
 extern SynchConsole *synchconsole;
 extern int procCount;
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
 class FrameProvider;
 extern FrameProvider *frameProvider;
 #endif

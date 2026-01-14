@@ -157,7 +157,7 @@ void Initialize(int argc, char **argv) {
     synchconsole = new SynchConsole(NULL, NULL);
 #endif
 
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
     frameProvider = new FrameProvider(NumPhysPages);
     InitProcessSystem();
 
@@ -186,7 +186,7 @@ void Cleanup() {
     delete postOffice;
 #endif
 
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
     delete frameProvider;
     frameProvider = nullptr;
 #endif

@@ -144,7 +144,7 @@ int do_UserThreadJoin(int tid) {
     return 0;
 }
 
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
 int do_sbrk(int n){
     if (n < 0) {
         return -1;
