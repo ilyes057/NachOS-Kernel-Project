@@ -5,16 +5,6 @@
 #include "filesys.h"
 #include "synch.h"
 
-static Lock *procLock = nullptr;
-static int procCount = 0;
-
-static void InitProcess() {
-    if (procLock == nullptr) {
-        procLock = new Lock("procLock");
-        procCount = 1;//le processus initial (pere qui fork)
-    }
-}
-
 static void copyStringFromMachine2(int from, char *to, unsigned size)
 {
     if (size == 0) return;
@@ -51,40 +41,48 @@ int do_ForkExec(int userFilenameAddr)
 {
     char filename[256];
     copyStringFromMachine2(userFilenameAddr, filename, sizeof(filename));
+    
+    // Open the executable file
     OpenFile *executable = fileSystem->Open(filename);
-    if (executable == nullptr) return -1;
-    //init laddress space apartir de lexecutable
-    AddrSpace *space = new AddrSpace(executable);
+    if (executable == nullptr) {
+        printf("Unable to open file %s\n", filename);
+        return -1;
+    }
 
+    // Create new address space
+    AddrSpace *space = new AddrSpace(executable);
     delete executable;
-    //creer le thread du processus
+
+    // Create new thread
     Thread *t = new Thread(filename);
     if (t == nullptr) {
         delete space;
         return -1;
     }
 
+    // Allocate PID
+    int pid = AllocPid();
+    space->pid = pid;
+    processTable[pid].space = space; // Although space might be deleted on exit, keeping track can be useful
+
     t->space = space;
-    //initialise rle processus
-    InitProcess();
-    procLock->Acquire();
-    //conteur de processus sous CS car acces concurrents 
+
+    // Increment global process count
+    processTableLock->Acquire();
     procCount++;
-    procLock->Release();
-    //lancer le thread du nouveau processus
+    processTableLock->Release();
+
+    // Fork the new thread
     t->Fork(StartProcess, (int)space);
 
-    return 0;
+    return pid;
 }
 
-
-void do_ProcessExit() {
-    //assure que linit est faite mm si exit est appelle sans que forkexec soit appl avant
-    InitProcess();
-    //recupere laddress space du thread courant
+void do_ProcessExit(int exitStatus) {
     AddrSpace *space = currentThread->space;
+    int pid = space->pid;
 
-    //un proc doit attendre tous ses threads avant de se terminer
+    // Complete all threads in this process
     space->userLock->Acquire();
     while (space->nbThreads > 0) {
         space->userLock->Release();
@@ -92,18 +90,59 @@ void do_ProcessExit() {
         space->userLock->Acquire();
     }
     space->userLock->Release();
+    
+    if (pid != -1) {
+        processTableLock->Acquire();
+        processTable[pid].exitStatus = exitStatus;
+        
+        // Wake up waiting parent
+        if (processTable[pid].waitSem != nullptr) {
+            processTable[pid].waitSem->V();
+        }
+        processTableLock->Release();
+    }
 
+    // Cleanup address space
     currentThread->space = nullptr;
     delete space;
 
-    procLock->Acquire();
+    processTableLock->Acquire();
     procCount--;
     int left = procCount;
-    procLock->Release();
-    //faire halt uniquement si le processus est le dernier, si non juste terminer le thread en qst
+    processTableLock->Release();
+
     if (left == 0) {
         interrupt->Halt();
     }
+    
     currentThread->Finish();
     ASSERT(false);
+}
+
+int do_Wait(int pid) {
+    if (pid < 0 || pid >= processTableCap) return -1;
+
+    processTableLock->Acquire();
+    if (!processTable[pid].valid) {
+        processTableLock->Release();
+        return -1;
+    }
+    
+    // We need to wait.
+    Semaphore* sem = processTable[pid].waitSem;
+    processTableLock->Release();
+
+    if (sem != nullptr) {
+        sem->P();
+    }
+
+    processTableLock->Acquire();
+    int exitStatus = processTable[pid].exitStatus;
+    
+    // Now we can free the PId
+    processTableLock->Release();
+    
+    FreePid(pid);
+
+    return exitStatus;
 }

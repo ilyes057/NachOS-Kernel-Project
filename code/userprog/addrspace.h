@@ -52,6 +52,7 @@ class AddrSpace {
     Lock *userLock;
     Semaphore *userThreadSem;
     int nbThreads=0;
+    int pid = -1;
 
     int AllocateUserStack(int* outSlot, int* outSp);
     void FreeUserStack(int slot);

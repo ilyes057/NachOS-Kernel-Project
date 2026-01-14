@@ -107,8 +107,7 @@ void do_UserThreadExit() {
     space->FreeUserStack(slot);
     space->nbThreads--;
     if (space->nbThreads == 0) {
-        space->userThreadSem->V(); //wake the process waiting for all threads to finish (halt if it was called
-        //or exit from the creator process )
+        space->userThreadSem->V(); //wake the process waiting for all threads to finish 
     }
     space->userLock->Release();
     currentThread->Finish();

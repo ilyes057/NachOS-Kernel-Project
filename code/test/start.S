@@ -217,8 +217,17 @@ ForkExec:
     j $31
     .end ForkExec
 
+
+	.globl Wait
+    .ent    Wait
+Wait:
+    addiu $2,$0,SC_Wait
+    syscall
+    j $31
+    .end Wait
+	
 /* dummy function to keep gcc happy */
-        .globl  __main
+		.globl  __main
         .ent    __main
 __main:
         j       $31

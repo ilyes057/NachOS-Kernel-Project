@@ -1,31 +1,54 @@
 #include "syscall.h"
 
+// --- Fonction utilitaire pour comparer deux chaînes ---
+// Retourne 0 si s1 est identique à s2
+int my_strcmp(char *s1, char *s2) {
+    while (*s1 && (*s1 == *s2)) {
+        s1++;
+        s2++;
+    }
+    return *(unsigned char *)s1 - *(unsigned char *)s2;
+}
+
+void clean(char* buffer){
+    for(int i = 0; i < 60; i++) {
+            if (buffer[i] == '\n') {
+                buffer[i] = '\0'; 
+                break;            
+            }
+            
+            if (buffer[i] == '\0') break; 
+    }
+}
+
 int main() {
-    SpaceId newProc;
-    OpenFileId input = ConsoleInput;
-    OpenFileId output = ConsoleOutput;
-    char prompt[2], buffer[60];
-    int i;
+    char buffer[60];
+    int newProcID;
 
-    prompt[0] = '-';
-    prompt[1] = '-';
 
-    while (1) {
-        Write(prompt, 2, output);
+    PutString("Bienvenue dans le NachOS Shell \n");
 
-        i = 0;
+    while(1) {
+        PutString("nachos> ");
 
-        do {
+        GetString(buffer, 60); 
+        clean(buffer);
 
-            Read(&buffer[i], 1, input);
+        if (my_strcmp(buffer, "quit") == 0) {
+            PutString("quitting...");
+            break;
+        }
 
-        } while (buffer[i++] != '\n');
+        newProcID = ForkExec(buffer); 
+        PutInt(newProcID);
+        if (newProcID == -1) {
+            PutString("Error fork exec\n");
+        }else{
+            Wait(newProcID);
 
-        buffer[--i] = '\0';
-
-        if (i > 0) {
-            newProc = Exec(buffer);
-            Join(newProc);
         }
     }
+    
+    PutString("Fermeture du Shell.\n");
+    return 0;
 }

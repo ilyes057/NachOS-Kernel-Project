@@ -19,7 +19,24 @@
 
 #define MAX_STRING_SIZE 256
 
+#define MAX_INIT_PIDS 10
+struct ProcessInfo {
+    bool valid;           // Remplace ton compteur : si true, le slot compte
+    AddrSpace *space;
+    Semaphore *waitSem;   // Pour le Wait(pid)
+    int exitStatus;
+};
 
+// Variables globales pour la gestion des PIDs
+extern ProcessInfo* processTable; // Le tableau dynamique
+extern int processTableCap;       // Capacité actuelle
+extern int nextPid;               // Le compteur pour les nouveaux PIDs (si rien à recycler)
+extern List* freePids;            // La liste des PIDs recyclables
+extern Lock* processTableLock;    // Verrou obligatoire (car partagé par tous les processus)
+
+extern int AllocPid();     
+extern void FreePid(int pid); 
+extern void InitProcessSystem();
 // Initialization and cleanup routines
 extern void Initialize(int argc, char **argv); // Initialization,
                                                // called before anything else
@@ -33,7 +50,7 @@ extern Interrupt *interrupt;        // interrupt status
 extern Statistics *stats;           // performance metrics
 extern Timer *timer;                // the hardware alarm clock
 extern SynchConsole *synchconsole;
-
+extern int procCount;
 #ifdef STEP4
 class FrameProvider;
 extern FrameProvider *frameProvider;

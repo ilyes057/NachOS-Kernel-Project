@@ -39,7 +39,7 @@
 #define SC_UserThreadExit 18
 #define SC_UserThreadJoin 19
 #define SC_ForkExec 20
-
+#define SC_Wait 21
 #ifdef IN_USER_MODE
 
 // LB: This part is read only on compiling the test/*.c files.
@@ -143,6 +143,7 @@ int UserThreadCreate(void f(void *arg), void *arg);
 void UserThreadExit();
 int UserThreadJoin(int tid);
 int ForkExec(char *s);
+int Wait(int pid);
 
 #endif // IN_USER_MODE
 

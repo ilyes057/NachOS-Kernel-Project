@@ -42,7 +42,7 @@ Semaphore::Semaphore(const char *debugName, int initialValue) {
 //----------------------------------------------------------------------
 // Semaphore::Semaphore
 //      De-allocate semaphore, when no longer needed.  Assume no one
-//      is still waiting on the semaphore!
+//      is still waiti  ng on the semaphore!
 //----------------------------------------------------------------------
 
 Semaphore::~Semaphore() { delete queue; }
@@ -92,13 +92,31 @@ void Semaphore::V() {
 // Dummy functions -- so we can compile our later assignments
 // Note -- without a correct implementation of Condition::Wait(),
 // the test case in the network assignment won't work!
-Lock::Lock(const char *debugName) {}
+Lock::Lock(const char *debugName) {
+    name = debugName;
+    sem = new Semaphore("LockSemaphore", 1);
+    owner = NULL;
+}
 
-Lock::~Lock() {}
+Lock::~Lock() {
+    delete sem;
+}
 
-void Lock::Acquire() {}
+void Lock::Acquire() {
+    ASSERT(!isHeldByCurrentThread()); // Can't acquire if already held
+    sem->P();
+    owner = currentThread;
+}
 
-void Lock::Release() {}
+void Lock::Release() {
+    ASSERT(isHeldByCurrentThread()); // Must hold lock to release
+    owner = NULL;
+    sem->V();
+}
+
+bool Lock::isHeldByCurrentThread() {
+    return (owner == currentThread);
+}
 
 Condition::Condition(const char *debugName) {}
 

@@ -2,7 +2,6 @@
 
 void printer(void *arg) {
     char *message = (char *)arg;
-    // Si l'argument est mal passé, ceci affichera du garbage ou plantera
     PutString("Thread dit : ");
     PutString(message);
     PutString("\n");
@@ -11,7 +10,6 @@ void printer(void *arg) {
 
 int main() {
     PutString("--- Test Passage Arguments (Pointeurs) ---\n");
-    // On passe une adresse mémoire (pointeur vers string)
     int t1 = UserThreadCreate(printer, (void *)"Bonjour");
     int t2 = UserThreadCreate(printer, (void *)"Monde");
     

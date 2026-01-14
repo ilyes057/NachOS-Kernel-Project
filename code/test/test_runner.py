@@ -38,7 +38,6 @@ def run_test():
     print(f" Programme utilisateur : {USER_PROG}")
     #print(f" Donnée injectée : '{expected_str}'")
 
-    # Commande équivalente à : ../build/nachos-step2 -x console_test
     cmd = [NACHOS_CMD, '-x', USER_PROG]
 
     try:

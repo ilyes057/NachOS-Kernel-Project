@@ -119,7 +119,8 @@ void ExceptionHandler(ExceptionType which) {
                 DEBUG('r', "Shutdown, exit called with status %d.\n", x);
                 interrupt->Halt();
             #else
-                do_ProcessExit();  
+                int status = machine->ReadRegister(4);
+                do_ProcessExit(status);  
             #endif
             break;
         }
@@ -183,8 +184,14 @@ void ExceptionHandler(ExceptionType which) {
         #ifdef STEP4
         case SC_ForkExec: {
             int exec = machine->ReadRegister(4);   
-            int ret = do_ForkExec(exec);           
+            int ret = do_ForkExec(exec);         
             machine->WriteRegister(2, ret);
+            break;
+        }
+        case SC_Wait :{
+            int pid = machine->ReadRegister(4);
+            int result = do_Wait(pid);
+            machine->WriteRegister(2, result);
             break;
         }
         #endif

@@ -21,6 +21,13 @@ Timer *timer;
                              // for invoking context switches
 FrameProvider *frameProvider = nullptr;
 
+ProcessInfo* processTable;
+int processTableCap;
+int nextPid;
+List* freePids;
+Lock* processTableLock;
+int procCount;
+
 #ifdef FILESYS_NEEDED
 FileSystem *fileSystem;
 #endif
@@ -152,6 +159,8 @@ void Initialize(int argc, char **argv) {
 
 #ifdef STEP4
     frameProvider = new FrameProvider(NumPhysPages);
+    InitProcessSystem();
+
 #endif
 
 #ifdef FILESYS
@@ -201,4 +210,112 @@ void Cleanup() {
     delete interrupt;
 
     Exit(0);
+}
+
+
+void InitProcessSystem() {
+    processTableCap = MAX_INIT_PIDS;
+    processTable = new ProcessInfo[processTableCap];
+    // On initialise tout à vide
+    for (int i = 0; i < processTableCap; i++) {
+        processTable[i].valid = false;
+        processTable[i].waitSem = nullptr;
+    }
+    
+    nextPid = 1;
+    freePids = new List();
+    procCount = 0;
+    processTableLock = new Lock("Process Table Lock");
+}
+
+// Fonction utilitaire pour agrandir le tableau (Miroir de UpgradeTidCapacity)
+void UpgradeProcessCapacity(int pid) {
+    if (pid < processTableCap) return;
+
+    int newCap = processTableCap;
+    while (newCap <= pid) newCap *= 2;
+
+    ProcessInfo* newTab = new ProcessInfo[newCap];
+    
+    // Init de la nouvelle partie
+    for (int i = processTableCap; i < newCap; i++) {
+        newTab[i].valid = false;
+        newTab[i].waitSem = nullptr;
+    }
+
+    // Copie de l'ancienne partie
+    for (int i = 0; i < processTableCap; i++) {
+        newTab[i].waitSem = processTable[i].waitSem;
+        newTab[i].valid = processTable[i].valid;
+    }
+
+    delete[] processTable;
+    processTable = newTab;
+    processTableCap = newCap;
+}
+
+// ---------------------------------------------------------
+// AllocPid : Logique "First Fit" déterministe
+// ---------------------------------------------------------
+int AllocPid() {
+    processTableLock->Acquire(); // PROTECTION CRITIQUE
+
+    int pid;
+    // 1. On regarde si on peut recycler un vieux PID
+    void* v = (freePids != nullptr) ? freePids->Remove() : nullptr;
+
+    if (v != nullptr) {
+        // RECYCLAGE : On prend le PID qui a été libéré le plus tôt (FIFO)
+        pid = (int)((long)v); // Cast compatible 32/64 bits
+    } else {
+        // NOUVEAU : On incrémente le compteur
+        pid = nextPid++;
+    }
+    // 2. Agrandissement si nécessaire
+    UpgradeProcessCapacity(pid);
+
+    // 3. Initialisation du slot
+    ProcessInfo* p = &processTable[pid];
+    p->valid = true;
+    p->exitStatus = 0;
+    p->waitSem = new Semaphore("Process Wait Sem", 0);
+    // p->space sera assigné par l'appelant (do_ForkExec)
+
+    processTableLock->Release();
+    return pid;
+}
+
+// ---------------------------------------------------------
+// FreePid : Libération et mise en recyclage
+// ---------------------------------------------------------
+void FreePid(int pid) {
+    processTableLock->Acquire();
+
+    if (pid < 0 || pid >= processTableCap) {
+        processTableLock->Release();
+        return;
+    }
+
+    ProcessInfo* p = &processTable[pid];
+    if (!p->valid) {
+        processTableLock->Release();
+        return;
+    }
+
+    // 1. Nettoyage du slot
+    p->valid = false;
+    if (p->waitSem != nullptr) {
+        delete p->waitSem;
+        p->waitSem = nullptr;
+    }
+    
+    // Note: p->space est généralement supprimé avant, dans do_Exit ou do_ProcessExit
+
+    // 2. RECYCLAGE : On ajoute ce PID à la fin de la liste des libres
+    // Cela garantit que ce PID sera réutilisé plus tard (Déterminisme)
+    if (freePids != nullptr) {
+        freePids->Append((void*)((long)pid));
+    }
+
+    processTableLock->Release();
 }

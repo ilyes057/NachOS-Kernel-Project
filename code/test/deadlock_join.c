@@ -42,9 +42,7 @@ int main() {
     // 2. On lance B
     id_B = UserThreadCreate(thread_B, (void *)0);
 
-    // 3. Le Main se retire du jeu
-    // Attention : Si le Main fait Join(A), il va aussi se bloquer, 
-    // ce qui est parfait pour le test global.
+
     PutString("Main: Je lance le deadlock et j'attends la fin du monde...\n");
     
     UserThreadJoin(id_A);

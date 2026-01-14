@@ -30,6 +30,15 @@ void StartProcess(char *filename) {
         return;
     }
     space = new AddrSpace(executable);
+    
+    // Assign PID to initial process
+    space->pid = AllocPid();
+    processTable[space->pid].space = space;
+    
+    processTableLock->Acquire();
+    procCount++;
+    processTableLock->Release();
+
     currentThread->space = space;
 
     delete executable; // close file

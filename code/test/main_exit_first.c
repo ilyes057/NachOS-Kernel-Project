@@ -15,7 +15,6 @@ int main() {
     UserThreadCreate(slow_child, (void *)0);
     
     PutString("Main : Je meurs tout de suite (Exit sans Join).\n");
-    //UserThreadExit();
     
     PutString("ERREUR : Je suis un zombie !\n"); 
     Halt();
