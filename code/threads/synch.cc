@@ -115,15 +115,55 @@ void Lock::Release() {
 }
 
 bool Lock::isHeldByCurrentThread() {
-    return (owner == currentThread);
+    return (owner != NULL) && (owner == currentThread);
 }
 
-Condition::Condition(const char *debugName) {}
+Condition::Condition(const char *debugName) {
+    name = debugName;
+    waitQueue = new List;
+}
 
-Condition::~Condition() {}
+Condition::~Condition() {
+    delete waitQueue;
+}
 
-void Condition::Wait(Lock *conditionLock) { ASSERT(FALSE); }
+void Condition::Wait(Lock *conditionLock) { 
+    ASSERT(conditionLock != NULL);
+    ASSERT(conditionLock->isHeldByCurrentThread());
+    Semaphore *sem = new Semaphore("CondSem", 0);
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+    waitQueue->Append((void *)sem);
+    conditionLock->Release();
+    (void)interrupt->SetLevel(oldLevel);
+    sem->P();
+    conditionLock->Acquire();
+    delete sem;
+ }
 
-void Condition::Signal(Lock *conditionLock) {}
+void Condition::Signal(Lock *conditionLock) {
+    ASSERT(conditionLock != NULL);
+    ASSERT(conditionLock->isHeldByCurrentThread());
 
-void Condition::Broadcast(Lock *conditionLock) {}
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+
+    Semaphore *sem = (Semaphore *)waitQueue->Remove();
+    if (sem != NULL) {
+        sem->V();
+    }
+
+    (void)interrupt->SetLevel(oldLevel);
+}
+
+void Condition::Broadcast(Lock *conditionLock) {
+    ASSERT(conditionLock != NULL);
+    ASSERT(conditionLock->isHeldByCurrentThread());
+
+    IntStatus oldLevel = interrupt->SetLevel(IntOff);
+
+    Semaphore *sem;
+    while ((sem = (Semaphore *)waitQueue->Remove()) != NULL) {
+        sem->V();
+    }
+
+    (void)interrupt->SetLevel(oldLevel);
+}
