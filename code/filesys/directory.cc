@@ -39,8 +39,12 @@ Directory::Directory(int size)
 {
     table = new DirectoryEntry[size];
     tableSize = size;
-    for (int i = 0; i < tableSize; i++)
-	table[i].inUse = FALSE;
+    for (int i = 0; i < tableSize; i++){
+        table[i].inUse = FALSE;
+        table[i].sector = -1;
+        table[i].directory=0;
+    }
+	
 }
 
 //----------------------------------------------------------------------
@@ -115,6 +119,20 @@ Directory::Find(const char *name)
     return -1;
 }
 
+bool
+Directory::Find(const char *name, int *sector, int *isDir)
+{
+    int i = FindIndex(name);
+
+    if (i == -1)
+        return FALSE;
+    if (sector)
+        *sector = table[i].sector;
+    if (isDir)
+        *isDir = table[i].directory;
+    return TRUE;
+}
+
 //----------------------------------------------------------------------
 // Directory::Add
 // 	Add a file into the directory.  Return TRUE if successful;
@@ -127,7 +145,7 @@ Directory::Find(const char *name)
 //----------------------------------------------------------------------
 
 bool
-Directory::Add(const char *name, int newSector)
+Directory::Add(const char *name, int newSector, int directory)
 { 
     if (FindIndex(name) != -1)
 	return FALSE;
@@ -137,6 +155,7 @@ Directory::Add(const char *name, int newSector)
             table[i].inUse = TRUE;
             strncpy(table[i].name, name, FileNameMaxLen); 
             table[i].sector = newSector;
+            table[i].directory=directory;
         return TRUE;
 	}
     return FALSE;	// no space.  Fix when we have extensible files.
@@ -194,4 +213,17 @@ Directory::Print()
 	}
     printf("\n");
     delete hdr;
+}
+
+//check if directory is empty(useful for remove since we can only remove empty directories)
+bool Directory::IsEmpty()
+{
+    for (int i = 0; i < tableSize; i++) {
+        if (table[i].inUse) {
+            //ignore . and ..
+            if (strcmp(table[i].name, ".") != 0 && strcmp(table[i].name, "..") != 0)
+                return FALSE;
+        }
+    }
+    return TRUE;
 }

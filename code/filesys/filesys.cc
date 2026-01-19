@@ -114,7 +114,8 @@ FileSystem::FileSystem(bool format)
 
         freeMapFile = new OpenFile(FreeMapSector);
         directoryFile = new OpenFile(DirectorySector);
-     
+        currentDirectoryFile = new OpenFile(DirectorySector); // set current directory to root
+        currentDirectorySector = DirectorySector;
     // Once we have the files "open", we can write the initial version
     // of each file back to disk.  The directory at this point is completely
     // empty; but the bitmap has been changed to reflect the fact that
@@ -139,6 +140,8 @@ FileSystem::FileSystem(bool format)
     // the bitmap and directory; these are left open while Nachos is running
         freeMapFile = new OpenFile(FreeMapSector);
         directoryFile = new OpenFile(DirectorySector);
+        currentDirectoryFile = new OpenFile(DirectorySector); // set current directory to root
+        currentDirectorySector = DirectorySector;
     }
 }
 
@@ -193,7 +196,7 @@ FileSystem::Create(const char *name, int initialSize)
         sector = freeMap->Find();	// find a sector to hold the file header
     	if (sector == -1) 		
             success = FALSE;		// no free block for file header 
-        else if (!directory->Add(name, sector))
+        else if (!directory->Add(name, sector, 0))
             success = FALSE;	// no space in directory
 	else {
     	    hdr = new FileHeader;
@@ -260,10 +263,35 @@ FileSystem::Remove(const char *name)
     Directory *directory;
     BitMap *freeMap;
     FileHeader *fileHdr;
-    int sector;
+    int sector=-1;
     
     directory = new Directory(NumDirEntries);
     directory->FetchFrom(directoryFile);
+    int isDir = 0;
+
+    if (!directory->Find(name, &sector, &isDir)) {
+        delete directory;
+        return FALSE; // not found
+    }
+
+    //un rep ne peut etre supp que sil est vide
+    if (isDir) {
+        OpenFile *dirFile = new OpenFile(sector);
+        Directory *subdir = new Directory(NumDirEntries);
+        subdir->FetchFrom(dirFile);
+
+        if (!subdir->IsEmpty()) {
+            delete subdir;
+            delete dirFile;
+            delete directory;
+            return FALSE; //directory not empty
+        }
+
+        delete subdir;
+        delete dirFile;
+        //si vide, on continue et on supprime 
+    }
+
     sector = directory->Find(name);
     if (sector == -1) {
        delete directory;
@@ -297,7 +325,7 @@ FileSystem::List()
 {
     Directory *directory = new Directory(NumDirEntries);
 
-    directory->FetchFrom(directoryFile);
+    directory->FetchFrom(currentDirectoryFile);
     directory->List();
     delete directory;
 }
@@ -339,3 +367,83 @@ FileSystem::Print()
     delete freeMap;
     delete directory;
 } 
+
+//function to create a subdirectory of the current directory
+bool 
+FileSystem::MakeDirectory(char *name)
+{
+    Directory *currentdir = new Directory(NumDirEntries); 
+    Directory *subdir =new Directory(NumDirEntries);
+    FileHeader *hdr = new FileHeader;
+    BitMap *freeMap = new BitMap(NumSectors);
+    int sector;
+    bool success = FALSE;
+
+    printf("Creating directory: %s\n", name);
+    //store directorytable of the current directory in currentdir
+    currentdir->FetchFrom(currentDirectoryFile);
+
+    //check the free map for a free sector to store the header of the subdirectory
+    freeMap->FetchFrom(freeMapFile);
+    sector = freeMap->Find(); 
+
+    if (sector == -1) {
+        //no more available secotrs
+        success = FALSE; 
+    } else {
+        if (!hdr->Allocate(freeMap, DirectoryFileSize)) {
+            success = FALSE;
+        } else {
+            hdr->WriteBack(sector);
+            if (!currentdir->Add(name, sector, 1)) {
+                success = FALSE;
+            } else {
+                //add mandatory entries
+                subdir->Add((char *)".", sector, 1);
+                subdir->Add((char *)"..", currentDirectorySector, 1); // Point to parent
+                hdr->WriteBack(sector); 
+            
+                //write the directory table of the subdirectory (with . .. for now)
+                OpenFile *subdirf = new OpenFile(sector); // Create a temporary file handle
+                subdir->WriteBack(subdirf);
+                delete subdirf;
+
+                //changes being the fact that subdirwas addedto 
+                //the directory table and so it was rewritten to the file of the curr directroy
+                currentdir->WriteBack(currentDirectoryFile);
+                freeMap->WriteBack(freeMapFile);
+
+                success = TRUE;
+            }
+        }
+    }
+    
+    // Cleanup memory
+    delete currentdir;
+    delete subdir;
+    delete hdr;
+    delete freeMap;
+    
+    
+    return success;
+}
+
+//function to change directory from the current one to a subdirectory
+bool
+FileSystem::ChangeDirectory(char *name){
+    Directory *directory = new Directory(NumDirEntries);
+    int sector;
+    bool success = FALSE;  
+    
+    directory->FetchFrom(currentDirectoryFile);
+
+    int isDir = 0;
+    if (directory->Find(name, &sector, &isDir) && isDir) {
+        delete currentDirectoryFile;//fermeture de l'ancien rep.
+        currentDirectoryFile = new OpenFile(sector);//nouveau  rep
+        currentDirectorySector = sector;
+        success=TRUE;
+    }
+    delete directory;
+    return success;
+}
