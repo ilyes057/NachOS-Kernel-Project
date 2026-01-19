@@ -21,7 +21,7 @@ class RelHeader {
 
 class ReliablePostOffice {
   public:
-    ReliablePostOffice(PostOffice *poste, int boite, int tempoTicks, int nbMaxReemissions);
+    ReliablePostOffice(PostOffice *poste, int boite, int tempoTicks=1000000, int nbMaxReemissions=200);
     ~ReliablePostOffice();
 
     bool SendReliable(int destMachine, const char *data, int len);

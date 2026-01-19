@@ -6,15 +6,6 @@
 #include <sys/stat.h>
 
 
-static bool SocketExists(int numMachine) {
-    if (numMachine < 0 || numMachine >= MAX_MACHINES) return false;
-
-    char name[32];
-    snprintf(name, sizeof(name), "SOCKET_%d", numMachine);
-
-    struct stat st;
-    return stat(name, &st) == 0;
-}
 
 ReliablePostOffice::ReliablePostOffice(PostOffice *poste_, int boite_, int tempoTicks_, int nbMaxReemissions_)
     : poste(poste_), boite(boite_), tempoTicks(tempoTicks_), nbMaxReemissions(nbMaxReemissions_) {
@@ -120,8 +111,6 @@ bool ReliablePostOffice::Decoder(const char *buf, int msgLen, RelHeader *hdr, co
 }
 
 bool ReliablePostOffice::EnvoyerData(int destMachine, int seq, const char *payload, int payloadLen) {
-    if (!SocketExists(destMachine)) return false;
-
     int maxPayload = MaxMailSize - (int)sizeof(RelHeader);
     if (payloadLen < 0 || payloadLen > maxPayload) return false;
 
@@ -141,8 +130,6 @@ bool ReliablePostOffice::EnvoyerData(int destMachine, int seq, const char *paylo
 }
 
 bool ReliablePostOffice::EnvoyerAck(int destMachine, int ackSeq) {
-    if (!SocketExists(destMachine)) return false;
-
     PacketHeader pkt;
     MailHeader mail;
 
@@ -257,10 +244,6 @@ bool ReliablePostOffice::SendReliable(int destMachine, const char *data, int len
     bool success = false;
 
     for (int attempt = 0; attempt <= nbMaxReemissions; attempt++) {
-        if (!EnvoyerData(destMachine, seq, data, len)) {
-            break;
-        }
-
         int delay = tempoTicks;
         if (delay <= 0) delay = 1;
 
@@ -275,7 +258,16 @@ bool ReliablePostOffice::SendReliable(int destMachine, const char *data, int len
 
         // Timer interrupt
         interrupt->Schedule(TimeoutStub, (int)this, delay, TimerInt);
+        stateLock->Release();
 
+        if (!EnvoyerData(destMachine, seq, data, len)) {
+            stateLock->Acquire();
+            ackAttente = false;
+            timeoutArmed = false;
+            stateLock->Release();
+            break;
+        }
+        stateLock->Acquire();
         while (!ackRecu && !timeout) {
             stateCond->Wait(stateLock);
         }
