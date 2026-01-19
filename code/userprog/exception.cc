@@ -27,6 +27,10 @@
 #include "userthread.h"
 #include "usersem.h"
 #include "process.h"
+#ifdef FILESYS
+#include "openfile.h"
+#include "filesys.h"
+#endif
 
 //----------------------------------------------------------------------
 // UpdatePC : Increments the Program Counter register in order to resume
@@ -79,6 +83,23 @@ static void copyStringFromMachine(int from, char *to, unsigned size)
     }
     to[size - 1] = '\0';
 }
+#ifdef FILESYS
+static bool copyBufferFromMachine(int from, char *to, unsigned size) {
+    int val = 0;
+    for (unsigned i = 0; i < size; i++) {
+        if (!machine->ReadMem(from + (int)i, 1, &val)) return false;
+        to[i] = (char)val;
+    }
+    return true;
+}
+
+static bool copyBufferToMachine(int to, const char *from, unsigned size) {
+    for (unsigned i = 0; i < size; i++) {
+        if (!machine->WriteMem(to + (int)i, 1, (int)(unsigned char)from[i])) return false;
+    }
+    return true;
+}
+#endif
 
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2);
@@ -223,7 +244,113 @@ void ExceptionHandler(ExceptionType which) {
             break;
         }
         #endif
+        #ifdef FILESYS
+        case SC_Open: {
+            //user address of the name o the file
+            int userAddr = machine->ReadRegister(4); 
+            //string to store the name of the file
+            char name[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
 
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) 
+            { machine->WriteRegister(2, -1); break; }
+
+            //open the file if it exists
+            OpenFile *f = fileSystem->Open(name); 
+            if (f == NULL){ 
+                machine->WriteRegister(2, -1); 
+                break; 
+            }
+            //add file to the process fdtble if there is an available spot
+            int fd = currentThread->space->fdTable->Add(f);
+            if (fd < 0) {
+                delete f;
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            machine->WriteRegister(2, fd);
+            break;
+        }
+        case SC_Close: {
+            int fd = machine->ReadRegister(4);
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+            //remove the file from fd table
+            bool ok = currentThread->space->fdTable->Remove(fd);
+            machine->WriteRegister(2, ok ? 0 : -1);
+            break;
+        }
+        case SC_Read: {
+            int userBuf = machine->ReadRegister(4);
+            int size = machine->ReadRegister(5);
+            int fd = machine->ReadRegister(6);
+
+            if (size < 0) { machine->WriteRegister(2, -1); break; }
+            if (size == 0) { machine->WriteRegister(2, 0); break; }
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            OpenFile *f = currentThread->space->fdTable->Get(fd);
+            if (f == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            char *kbuf = new char[size];
+            int n = f->Read(kbuf, size); 
+
+            if (n > 0) {
+                if (!copyBufferToMachine(userBuf, kbuf, (unsigned)n)) {
+                    delete[] kbuf;
+                    machine->WriteRegister(2, -1);
+                    break;
+                }
+            }
+
+            delete[] kbuf;
+            machine->WriteRegister(2, n);
+            break;
+        }
+        case SC_Write: {
+            int userBuf = machine->ReadRegister(4);
+            int size = machine->ReadRegister(5);
+            int fd = machine->ReadRegister(6);
+
+            if (size < 0) { machine->WriteRegister(2, -1); break; }
+            if (size == 0) { machine->WriteRegister(2, 0); break; }
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            OpenFile *f = currentThread->space->fdTable->Get(fd);
+            if (f == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            char *kbuf = new char[size];
+            if (!copyBufferFromMachine(userBuf, kbuf, (unsigned)size)) {
+                delete[] kbuf;
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            int n = f->Write(kbuf, size);
+            delete[] kbuf;
+
+            machine->WriteRegister(2, n);
+            break;
+        }
+        #endif
         default: {
             printf("Unexpected user mode exception %d %d\n", which, type);
             ASSERT(FALSE);

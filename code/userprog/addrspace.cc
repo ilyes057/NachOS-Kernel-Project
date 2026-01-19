@@ -25,6 +25,8 @@
 #include <strings.h> /* for bzero */
 
 
+
+
 static inline void* IntToVoid(int x) { return (void*)(long)(unsigned)x; }
 static inline int VoidToInt(void* p) { return (int)(long)p; }
 
@@ -100,7 +102,9 @@ static void SwapHeader(NoffHeader *noffH) {
 AddrSpace::AddrSpace(OpenFile *executable) {
     NoffHeader noffH;
     unsigned int i, size;
-
+    #ifdef FILESYS
+    fdTable = new OpenFilesTable();
+    #endif
     userLock =new Lock("userLock");
     userThreadSem = new Semaphore("userThreadSem", 0);
     stackMap = new BitMap(MAX_USER_THREADS);
@@ -228,6 +232,9 @@ AddrSpace::~AddrSpace() {
             }
         }
     }
+    #endif
+    #ifdef FILESYS
+    delete fdTable;
     #endif
     // LB: Missing [] for delete
     // delete pageTable;
