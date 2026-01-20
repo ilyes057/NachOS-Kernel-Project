@@ -34,6 +34,7 @@ FileSystem *fileSystem;
 
 #ifdef FILESYS
 SynchDisk *synchDisk;
+systemTable *systemTable;
 #endif
 
 #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
@@ -165,6 +166,7 @@ void Initialize(int argc, char **argv) {
 
 #ifdef FILESYS
     synchDisk = new SynchDisk("DISK");
+    systemTable = new systemTable();
 #endif
 
 #ifdef FILESYS_NEEDED
@@ -203,6 +205,7 @@ void Cleanup() {
 
 #ifdef FILESYS
     delete synchDisk;
+    delete systemTable;
 #endif
 
     delete timer;

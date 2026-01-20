@@ -50,6 +50,7 @@
 #include "directory.h"
 #include "filehdr.h"
 #include "filesys.h"
+#include "systemTable.h"
 
 // Sectors containing the file headers for the bitmap of free sectors,
 // and the directory of files.  These file headers are placed in well-known 
@@ -144,6 +145,10 @@ FileSystem::FileSystem(bool format)
         currentDirectorySector = DirectorySector;
     }
 }
+FileSystem::~FileSystem() {
+    delete dataLock;
+}
+
 
 //----------------------------------------------------------------------
 // FileSystem::Create
@@ -184,7 +189,7 @@ FileSystem::Create(const char *name, int initialSize)
     bool success;
 
     DEBUG('f', "Creating file %s, size %d\n", name, initialSize);
-
+    dataLock->Acquire();
     directory = new Directory(NumDirEntries);
     directory->FetchFrom(directoryFile);
 
@@ -198,22 +203,23 @@ FileSystem::Create(const char *name, int initialSize)
             success = FALSE;		// no free block for file header 
         else if (!directory->Add(name, sector, 0))
             success = FALSE;	// no space in directory
-	else {
-    	    hdr = new FileHeader;
-	    if (!hdr->Allocate(freeMap, initialSize))
-            	success = FALSE;	// no space on disk for data
-	    else {	
-	    	success = TRUE;
-		// everthing worked, flush all changes back to disk
-    	    	hdr->WriteBack(sector); 		
-    	    	directory->WriteBack(directoryFile);
-    	    	freeMap->WriteBack(freeMapFile);
-	    }
-            delete hdr;
-	}
+        else {
+                hdr = new FileHeader;
+            if (!hdr->Allocate(freeMap, initialSize))
+                    success = FALSE;	// no space on disk for data
+            else {	
+                success = TRUE;
+            // everthing worked, flush all changes back to disk
+                    hdr->WriteBack(sector); 		
+                    directory->WriteBack(directoryFile);
+                    freeMap->WriteBack(freeMapFile);
+            }
+                delete hdr;
+        }
         delete freeMap;
     }
     delete directory;
+    dataLock->Release();
     return success;
 }
 
@@ -229,17 +235,26 @@ FileSystem::Create(const char *name, int initialSize)
 
 OpenFile *
 FileSystem::Open(const char *name)
-{ 
+{
+
     Directory *directory = new Directory(NumDirEntries);
     OpenFile *openFile = NULL;
     int sector;
 
     DEBUG('f', "Opening file %s\n", name);
+    dataLock->Acquire();
     directory->FetchFrom(directoryFile);
     sector = directory->Find(name); 
-    if (sector >= 0) 		
-	openFile = new OpenFile(sector);	// name was found in directory 
+    if (sector >= 0) {
+        if (!systemTable->Open(sector)) {
+            delete directory;
+            dataLock->Release();
+            return NULL;
+        }
+        openFile = new OpenFile(sector);	// name was found in directory 
+    }		
     delete directory;
+    dataLock->Release();
     return openFile;				// return NULL if not found
 }
 
@@ -264,16 +279,27 @@ FileSystem::Remove(const char *name)
     BitMap *freeMap;
     FileHeader *fileHdr;
     int sector=-1;
-    
+
     directory = new Directory(NumDirEntries);
+    dataLock->Acquire();
     directory->FetchFrom(directoryFile);
     int isDir = 0;
 
     if (!directory->Find(name, &sector, &isDir)) {
         delete directory;
+        dataLock->Release();
         return FALSE; // not found
     }
-
+    if (sector == -1) {
+       delete directory;
+       dataLock->Release();
+       return FALSE;			 // file not found 
+    }
+    if (systemTable->IsOpen(sector)) {
+        delete directory;
+        dataLock->Release();
+        return FALSE;
+    }
     //un rep ne peut etre supp que sil est vide
     if (isDir) {
         OpenFile *dirFile = new OpenFile(sector);
@@ -284,6 +310,7 @@ FileSystem::Remove(const char *name)
             delete subdir;
             delete dirFile;
             delete directory;
+            dataLock->Release();
             return FALSE; //directory not empty
         }
 
@@ -291,12 +318,7 @@ FileSystem::Remove(const char *name)
         delete dirFile;
         //si vide, on continue et on supprime 
     }
-
-    sector = directory->Find(name);
-    if (sector == -1) {
-       delete directory;
-       return FALSE;			 // file not found 
-    }
+    
     fileHdr = new FileHeader;
     fileHdr->FetchFrom(sector);
 
@@ -312,6 +334,8 @@ FileSystem::Remove(const char *name)
     delete fileHdr;
     delete directory;
     delete freeMap;
+    dataLock->Release();
+
     return TRUE;
 } 
 

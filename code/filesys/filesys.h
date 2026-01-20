@@ -73,12 +73,12 @@ class FileSystem {
     					// If "format", there is nothing on
 					// the disk, so initialize the directory
     					// and the bitmap of free blocks.
-
+	~FileSystem();
     bool Create(const char *name, int initialSize);  	
 					// Create a file (UNIX creat)
 
     OpenFile* Open(const char *name); 	// Open a file (UNIX open)
-
+	void Close(OpenFile* file);
     bool Remove(const char *name); 	// Delete a file (UNIX unlink)
 
     void List();			// List all the files in the file system
@@ -94,6 +94,7 @@ class FileSystem {
 					// file names, represented as a file
 	OpenFile* currentDirectoryFile;    // current directory
 	int currentDirectorySector;         // sector of the current directory
+	Lock *dataLock;
 };
 
 #endif // FILESYS
