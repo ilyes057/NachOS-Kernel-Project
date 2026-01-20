@@ -45,7 +45,8 @@
 #define SC_V 24
 #define SC_SBRK 25
 #define SC_Wait 26
-
+#define SC_Mkdir 27
+#define SC_Chdir 28
 #ifdef IN_USER_MODE
 
 // LB: This part is read only on compiling the test/*.c files.
@@ -103,8 +104,11 @@ typedef int OpenFileId;
 #define ConsoleInput 0
 #define ConsoleOutput 1
 
+int Mkdir(const char *name);
+int Chdir(const char *name);
 /* Create a Nachos file, with "name" */
-void Create(char *name);
+//changed prototype t match kernel create function
+int Create(const char *name, int initialSize);
 
 /* Open the Nachos file "name", and return an "OpenFileId" that can
  * be used to read and write to the file.

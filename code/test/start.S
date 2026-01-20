@@ -113,6 +113,22 @@ Close:
 	j	$31
 	.end Close
 
+	.globl Mkdir
+	.ent	Mkdir
+Mkdir:
+	addiu $2,$0,SC_Mkdir
+	syscall
+	j	$31
+	.end Mkdir
+	
+	.globl Chdir
+	.ent	Chdir
+Chdir:
+	addiu $2,$0,SC_Chdir
+	syscall
+	j	$31
+	.end Chdir
+
 	.globl Fork
 	.ent	Fork
 Fork:

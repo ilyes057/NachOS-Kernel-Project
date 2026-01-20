@@ -350,6 +350,40 @@ void ExceptionHandler(ExceptionType which) {
             machine->WriteRegister(2, n);
             break;
         }
+        case SC_Create: {
+            int userAddr = machine->ReadRegister(4);   // name
+            int initialSize = machine->ReadRegister(5);
+
+            char name[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
+
+            bool ok = fileSystem->Create(name, initialSize);
+            machine->WriteRegister(2, ok ? 0 : -1);
+            break;
+        }
+
+
+        case SC_Mkdir: {
+            int userAddr = machine->ReadRegister(4);
+
+            char name[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
+
+            bool ok = fileSystem->MakeDirectory(name);
+            machine->WriteRegister(2, ok ? 0 : -1);
+            break;
+        }
+
+        case SC_Chdir: {
+            int userAddr = machine->ReadRegister(4);
+
+            char name[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
+
+            bool ok = fileSystem->ChangeDirectory(name);
+            machine->WriteRegister(2, ok ? 0 : -1);
+            break;
+        }
         #endif
         default: {
             printf("Unexpected user mode exception %d %d\n", which, type);
