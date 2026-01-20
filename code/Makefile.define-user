@@ -89,7 +89,7 @@ memTest_EXTRA_SOURCES=mem.c
 $(eval $(call define-flavor,step2,userprog filesys-stub,synchconsole.cc,-DSTEP2))
 $(eval $(call define-flavor,step3,userprog filesys-stub,synchconsole.cc userthread.cc usersem.cc,-DSTEP3))
 $(eval $(call define-flavor,step4,userprog filesys-stub,synchconsole.cc userthread.cc frameprovider.cc process.cc usersem.cc,-DSTEP4))
-$(eval $(call define-flavor,step5,userprog filesys,synchconsole.cc userthread.cc frameprovider.cc process.cc usersem.cc OpenFilesTable.cc,-DSTEP5))
+$(eval $(call define-flavor,step5,userprog filesys,synchconsole.cc userthread.cc frameprovider.cc process.cc usersem.cc OpenFilesTable.cc systemTable.cc,-DSTEP5))
 # $(eval $(call define-flavor,mynetwork,userprog filesys-stub network, \
 #     synchconsole.cc userthread.cc))
 # $(eval $(call define-flavor,final,userprog filesys network,\

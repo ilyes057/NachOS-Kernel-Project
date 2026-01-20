@@ -68,14 +68,15 @@ extern SynchConsole *synchconsole;
 
 #ifdef FILESYS_NEEDED // FILESYS or FILESYS_STUB
 #include "filesys.h"
-class systemTable;
 extern FileSystem *fileSystem;
-extern systemTable *systemTable;
 #endif
 
 #ifdef FILESYS
 #include "synchdisk.h"
 extern SynchDisk *synchDisk;
+#include "filesys.h"
+class systemTable;
+extern systemTable *sysTable;
 #endif
 
 #ifdef NETWORK

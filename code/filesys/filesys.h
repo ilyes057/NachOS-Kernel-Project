@@ -65,6 +65,7 @@ class FileSystem {
 };
 
 #else // FILESYS
+class Lock;
 class FileSystem {
   public:
     FileSystem(bool format);		// Initialize the file system.
@@ -79,6 +80,7 @@ class FileSystem {
 
     OpenFile* Open(const char *name); 	// Open a file (UNIX open)
 	void Close(OpenFile* file);
+    int FindSector(const char *name); 	// Find header sector for name
     bool Remove(const char *name); 	// Delete a file (UNIX unlink)
 
     void List();			// List all the files in the file system

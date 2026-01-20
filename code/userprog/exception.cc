@@ -30,6 +30,7 @@
 #ifdef FILESYS
 #include "openfile.h"
 #include "filesys.h"
+#include "systemTable.h"
 #endif
 
 //----------------------------------------------------------------------
@@ -67,21 +68,23 @@ static void UpdatePC() {
 //      "which" is the kind of exception.  The list of possible exceptions
 //      are in machine.h.
 //----------------------------------------------------------------------
-static void copyStringFromMachine(int from, char *to, unsigned size)
+static bool copyStringFromMachine(int from, char *to, unsigned size)
 {
-    if (size == 0) return;
+    if (size == 0) return false;
     unsigned i = 0;
     int ch = 0;
     for (; i < size - 1; i++) {
         if (!machine->ReadMem(from + (int)i, 1, &ch)) {
-            break;
+            to[i] = '\0';
+            return false;
         }
         to[i] = (char)ch;
         if (to[i] == '\0') {
-            return;
+            return true;
         }
     }
     to[size - 1] = '\0';
+    return true;
 }
 #ifdef FILESYS
 static bool copyBufferFromMachine(int from, char *to, unsigned size) {
@@ -246,28 +249,47 @@ void ExceptionHandler(ExceptionType which) {
         #endif
         #ifdef FILESYS
         case SC_Open: {
-            //user address of the name o the file
-            int userAddr = machine->ReadRegister(4); 
-            //string to store the name of the file
+            int userAddr = machine->ReadRegister(4);
             char name[MAX_STRING_SIZE];
-            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
 
-            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) 
-            { machine->WriteRegister(2, -1); break; }
-
-            //open the file if it exists
-            OpenFile *f = fileSystem->Open(name); 
-            if (f == NULL){ 
-                machine->WriteRegister(2, -1); 
-                break; 
-            }
-            //add file to the process fdtble if there is an available spot
-            int fd = currentThread->space->fdTable->Add(f);
-            if (fd < 0) {
-                delete f;
+            if (!copyStringFromMachine(userAddr, name, MAX_STRING_SIZE)) {
                 machine->WriteRegister(2, -1);
                 break;
             }
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            int sector = fileSystem->FindSector(name);
+            if (sector < 0) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            if (!sysTable->Open(sector)) { 
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            OpenFile *f = new OpenFile(sector);
+            if (f == NULL) {
+                sysTable->Close(sector);
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            int fd = currentThread->space->fdTable->Add(f, sector);
+            if (fd < 0) {
+                delete f;
+                sysTable->Close(sector);
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            sysTable->Print();
+            currentThread->space->fdTable->Print();
 
             machine->WriteRegister(2, fd);
             break;
@@ -279,11 +301,20 @@ void ExceptionHandler(ExceptionType which) {
                 machine->WriteRegister(2, -1);
                 break;
             }
-            //remove the file from fd table
-            bool ok = currentThread->space->fdTable->Remove(fd);
-            machine->WriteRegister(2, ok ? 0 : -1);
+
+            int sector = currentThread->space->fdTable->Close(fd);
+            if (sector < 0) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            sysTable->Close(sector);
+            sysTable->Print();
+            currentThread->space->fdTable->Print();
+            machine->WriteRegister(2, 0);
             break;
         }
+
         case SC_Read: {
             int userBuf = machine->ReadRegister(4);
             int size = machine->ReadRegister(5);

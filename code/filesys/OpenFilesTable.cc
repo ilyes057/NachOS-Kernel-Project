@@ -1,45 +1,100 @@
 #include "OpenFilesTable.h"
+#include "synch.h"
 
 OpenFilesTable::OpenFilesTable() {
-    for (int i = 0; i < MAX_OPEN_FILES; i++)
-        table[i] = NULL;
+    fdtableLock = new Lock("OpenFilesTableLock");
+    for (int i = 0; i < MAX_OPEN_FILES; i++){
+        table[i].used = false;
+        table[i].of = NULL;
+        table[i].hdrSector = -1;
+    }
+        
 }
 
 OpenFilesTable::~OpenFilesTable() {
     CloseAll();
+    delete fdtableLock;
 }
 
-int OpenFilesTable::Add(OpenFile *f) {
+int OpenFilesTable::Add(OpenFile *f, int hdrSector) {
     if (f == NULL) return -1;
+    fdtableLock->Acquire();
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        if (table[i] == NULL) {
-            table[i] = f;
+        if (!table[i].used) {
+            table[i].used = true;
+            table[i].of = f;
+            table[i].hdrSector = hdrSector;
+            fdtableLock->Release();
             return i;
         }
     }
+    fdtableLock->Release();
     return -1; // table full
 }
 
 OpenFile* OpenFilesTable::Get(int fd) {
     if (fd < 0 || fd >= MAX_OPEN_FILES) return NULL;
-    return table[fd];
+    fdtableLock->Acquire();
+    OpenFile *res = (table[fd].used) ? table[fd].of : NULL;
+    fdtableLock->Release();
+    
+    return res;
 }
 
-bool OpenFilesTable::Remove(int fd) {
-    if (fd < 0 || fd >= MAX_OPEN_FILES) return false;
-    if (table[fd] == NULL) return false;
-    //plus tard faire close?
-    delete table[fd];
+// Close = enlève l'entrée + delete l'OpenFile + renvoie hdrSector
+// Le syscall fera ensuite systemTable->Close(hdrSector).
+int OpenFilesTable::Close(int fd) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES) return -1;
 
-    table[fd] = NULL;
-    return true;
+    fdtableLock->Acquire();
+    if (!table[fd].used) {
+        fdtableLock->Release();
+        return -1;
+    }
+
+    OpenFile *f = table[fd].of;
+    int hdrSector = table[fd].hdrSector;
+
+    table[fd].used = false;
+    table[fd].of = NULL;
+    table[fd].hdrSector = -1;
+
+    fdtableLock->Release();
+
+    delete f;
+    return hdrSector;
 }
+
 
 void OpenFilesTable::CloseAll() {
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        if (table[i] != NULL) {
-            delete table[i];
-            table[i] = NULL;
-        }
+        Close(i);
     }
+}
+
+int OpenFilesTable::GetHdrSector(int fd) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES) return -1;
+
+    fdtableLock->Acquire();
+    int s = table[fd].used ? table[fd].hdrSector : -1;
+    fdtableLock->Release();
+    return s;
+}
+
+void OpenFilesTable::Print() {
+    fdtableLock->Acquire();
+    printf("FDTable:\n");
+    for (int i = 0; i < MAX_OPEN_FILES; i++) {
+        printf("  fd=%d used=%d sector=%d\n",
+               i, table[i].used ? 1 : 0, table[i].hdrSector);
+    }
+    fdtableLock->Release();
+}
+
+bool OpenFilesTable::IsUsed(int fd) {
+    if (fd < 0 || fd >= MAX_OPEN_FILES) return false;
+    fdtableLock->Acquire();
+    bool used = table[fd].used;
+    fdtableLock->Release();
+    return used;
 }

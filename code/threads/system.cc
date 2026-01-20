@@ -8,6 +8,7 @@
 #include "system.h"
 #include "copyright.h"
 #include "../userprog/frameprovider.h"
+#include "systemTable.h"
 // This defines *all* of the global data structures used by Nachos.
 // These are all initialized and de-allocated by this file.
 
@@ -34,7 +35,7 @@ FileSystem *fileSystem;
 
 #ifdef FILESYS
 SynchDisk *synchDisk;
-systemTable *systemTable;
+systemTable *sysTable;
 #endif
 
 #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
@@ -166,7 +167,7 @@ void Initialize(int argc, char **argv) {
 
 #ifdef FILESYS
     synchDisk = new SynchDisk("DISK");
-    systemTable = new systemTable();
+    sysTable = new systemTable(10);
 #endif
 
 #ifdef FILESYS_NEEDED
@@ -205,7 +206,7 @@ void Cleanup() {
 
 #ifdef FILESYS
     delete synchDisk;
-    delete systemTable;
+    delete sysTable;
 #endif
 
     delete timer;

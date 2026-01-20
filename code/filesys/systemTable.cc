@@ -110,3 +110,16 @@ int systemTable::GetOpenCount(int hdrSector)
 
     return c;
 }
+
+void systemTable::Print()
+{
+    tableLock->Acquire();
+    printf("SystemTable:\n");
+    for (int i = 0; i < capacity; i++) {
+        if (entries[i].used) {
+            printf("  idx=%d sector=%d openCount=%d\n",
+                   i, entries[i].hdrSector, entries[i].openCount);
+        }
+    }
+    tableLock->Release();
+}

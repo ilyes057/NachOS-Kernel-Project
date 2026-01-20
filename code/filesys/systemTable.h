@@ -12,6 +12,7 @@ public:
     void Close(int hdrSector);
     bool IsOpen(int hdrSector);
     int GetOpenCount(int hdrSector);
+    void Print();
 
 private:
     struct Entry {
