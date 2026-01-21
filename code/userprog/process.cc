@@ -55,7 +55,6 @@ int do_ForkExec(int userFilenameAddr)
     delete executable;
 
     #ifdef FILESYS
-    // -------- Step 3: inherit parent's open files into the child --------
     AddrSpace *parentSpace = currentThread->space;
 
     if (parentSpace != nullptr && parentSpace->fdTable != nullptr &&
@@ -71,6 +70,8 @@ int do_ForkExec(int userFilenameAddr)
 
             int sector = parentSpace->fdTable->GetHdrSector(fd);
             if (sector < 0) continue;
+            OpenFile *parentF = parentSpace->fdTable->Get(fd);
+            int parentPos = (parentF != nullptr) ? parentF->GetSeekPosition() : 0;
 
             if (!sysTable->Open(sector)) {
                 //rollback and delete all previously opened files
@@ -90,8 +91,8 @@ int do_ForkExec(int userFilenameAddr)
                 delete space;
                 return -1;
             }
-
-            int childFd = space->fdTable->Add(childF, sector);
+            childF->Seek(parentPos);
+            int childFd = space->fdTable->AddAt(fd, childF, sector);
             if (childFd < 0) {
                 delete childF;
                 sysTable->Close(sector);

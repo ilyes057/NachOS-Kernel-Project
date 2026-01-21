@@ -30,6 +30,7 @@ OpenFile::OpenFile(int sector)
 { 
     hdr = new FileHeader;
     hdr->FetchFrom(sector);
+    seekLock=new Lock("seekLock");
     seekPosition = 0;
 }
 
@@ -41,6 +42,7 @@ OpenFile::OpenFile(int sector)
 OpenFile::~OpenFile()
 {
     delete hdr;
+    delete seekLock;
 }
 
 //----------------------------------------------------------------------
@@ -54,7 +56,9 @@ OpenFile::~OpenFile()
 void
 OpenFile::Seek(int position)
 {
+    seekLock->Acquire();
     seekPosition = position;
+    seekLock->Release();
 }	
 
 //----------------------------------------------------------------------
@@ -73,17 +77,26 @@ OpenFile::Seek(int position)
 int
 OpenFile::Read(char *into, int numBytes)
 {
-   int result = ReadAt(into, numBytes, seekPosition);
-   seekPosition += result;
-   return result;
+
+    int pos;
+    seekLock->Acquire();
+    pos=seekPosition;
+    seekPosition += numBytes;
+    seekLock->Release();
+    int result = ReadAt(into, numBytes, pos);
+    return result;
 }
 
 int
 OpenFile::Write(const char *into, int numBytes)
 {
-   int result = WriteAt(into, numBytes, seekPosition);
-   seekPosition += result;
-   return result;
+    int pos;
+    seekLock->Acquire();
+    pos=seekPosition;
+    seekPosition += numBytes;
+    seekLock->Release();
+    int result = WriteAt(into, numBytes, pos);
+    return result;
 }
 
 //----------------------------------------------------------------------
@@ -193,4 +206,10 @@ int
 OpenFile::Length() 
 { 
     return hdr->FileLength(); 
+}
+
+int
+OpenFile::GetSeekPosition() const
+{
+    return seekPosition;
 }

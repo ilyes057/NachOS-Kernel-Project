@@ -84,10 +84,11 @@ FileSystem::FileSystem(bool format)
 { 
     DEBUG('f', "Initializing the file system.\n");
     if (format) {
+        char zero[SectorSize];
         BitMap *freeMap = new BitMap(NumSectors);
         Directory *directory = new Directory(NumDirEntries);
-	FileHeader *mapHdr = new FileHeader;
-	FileHeader *dirHdr = new FileHeader;
+        FileHeader *mapHdr = new FileHeader;
+        FileHeader *dirHdr = new FileHeader;
 
         DEBUG('f', "Formatting the file system.\n");
 
@@ -128,6 +129,15 @@ FileSystem::FileSystem(bool format)
         DEBUG('f', "Writing bitmap and directory back to disk.\n");
 	freeMap->WriteBack(freeMapFile);	 // flush changes to disk
 	directory->WriteBack(directoryFile);
+
+        for (int i = 0; i < SectorSize; i++) {
+            zero[i] = '\0';
+        }
+        for (int s = 0; s < NumSectors; s++) {
+            if (!freeMap->Test(s)) {
+                synchDisk->WriteSector(s, zero);
+            }
+        }
 
 	if (DebugIsEnabled('f')) {
 	    freeMap->Print();
@@ -211,12 +221,31 @@ FileSystem::Create(const char *name, int initialSize)
                 hdr = new FileHeader;
             if (!hdr->Allocate(freeMap, initialSize))
                     success = FALSE;	// no space on disk for data
-            else {	
+            else {
                 success = TRUE;
             // everthing worked, flush all changes back to disk
                     hdr->WriteBack(sector); 		
                     directory->WriteBack(directoryFile);
                     freeMap->WriteBack(freeMapFile);
+                    if (initialSize > 0) {
+                        OpenFile *newFile = new OpenFile(sector);
+                        if (newFile != NULL) {
+                            char zero[SectorSize];
+                            for (int i = 0; i < SectorSize; i++) {
+                                zero[i] = '\0';
+                            }
+                            int remaining = initialSize;
+                            while (remaining > 0) {
+                                int toWrite = (remaining > SectorSize) ? SectorSize : remaining;
+                                int n = newFile->Write(zero, toWrite);
+                                if (n != toWrite) {
+                                    break;
+                                }
+                                remaining -= n;
+                            }
+                            delete newFile;
+                        }
+                    }
             }
                 delete hdr;
         }

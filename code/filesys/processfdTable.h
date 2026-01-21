@@ -1,5 +1,5 @@
-#ifndef OPENFILESTABLE_H
-#define OPENFILESTABLE_H
+#ifndef PROCESSFDTABLE_H
+#define PROCESSFDTABLE_H
 
 #include "openfile.h"
 
@@ -7,12 +7,13 @@
 
 class Lock;
 
-class OpenFilesTable {
+class processfdTable {
 public:
-    OpenFilesTable();
-    ~OpenFilesTable();
+    processfdTable();
+    ~processfdTable();
 
     int Add(OpenFile *f, int hdrSector);      // returns fd [0..9] or -1
+    int AddAt(int fd, OpenFile *f, int hdrSector); // force fd index
     OpenFile* Get(int fd);     // NULL if invalid / closed
     int Close(int fd);                  // returns hdrSector, or -1 if invalid
     void CloseAll();           // useful at process exit

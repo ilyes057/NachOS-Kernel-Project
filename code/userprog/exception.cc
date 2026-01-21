@@ -31,6 +31,7 @@
 #include "openfile.h"
 #include "filesys.h"
 #include "systemTable.h"
+//static Lock tablePrintLock("tablePrintLock");
 #endif
 
 //----------------------------------------------------------------------
@@ -268,7 +269,9 @@ void ExceptionHandler(ExceptionType which) {
                 break;
             }
 
-            if (!sysTable->Open(sector)) { 
+            ////tablePrintLock.Acquire();
+            if (!sysTable->Open(sector)) {
+                //tablePrintLock.Release();
                 machine->WriteRegister(2, -1);
                 break;
             }
@@ -276,6 +279,7 @@ void ExceptionHandler(ExceptionType which) {
             OpenFile *f = new OpenFile(sector);
             if (f == NULL) {
                 sysTable->Close(sector);
+                //tablePrintLock.Release();
                 machine->WriteRegister(2, -1);
                 break;
             }
@@ -284,13 +288,14 @@ void ExceptionHandler(ExceptionType which) {
             if (fd < 0) {
                 delete f;
                 sysTable->Close(sector);
+                //tablePrintLock.Release();
                 machine->WriteRegister(2, -1);
                 break;
             }
 
             sysTable->Print();
             currentThread->space->fdTable->Print();
-
+            //tablePrintLock.Release();
             machine->WriteRegister(2, fd);
             break;
         }
@@ -302,15 +307,17 @@ void ExceptionHandler(ExceptionType which) {
                 break;
             }
 
+            //tablePrintLock.Acquire();
             int sector = currentThread->space->fdTable->Close(fd);
             if (sector < 0) {
+                //tablePrintLock.Release();
                 machine->WriteRegister(2, -1);
                 break;
             }
-
             sysTable->Close(sector);
             sysTable->Print();
             currentThread->space->fdTable->Print();
+            //tablePrintLock.Release();
             machine->WriteRegister(2, 0);
             break;
         }

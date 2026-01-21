@@ -103,9 +103,10 @@ AddrSpace::AddrSpace(OpenFile *executable) {
     NoffHeader noffH;
     unsigned int i, size;
     #ifdef FILESYS
-    fdTable = new OpenFilesTable();
+    fdTable = new processfdTable();
     #endif
-    userLock =new Lock("userLock");
+    userLock = new Lock("userLock");
+    semListLock = new Lock("semListLock");
     userThreadSem = new Semaphore("userThreadSem", 0);
     stackMap = new BitMap(MAX_USER_THREADS);
     stackMap->Mark(0);
@@ -270,6 +271,7 @@ AddrSpace::~AddrSpace() {
         freeSemIds = nullptr;
     }
     delete userThreadSem;
+    delete semListLock;
     delete userLock;
     delete stackMap;
     // End of modification

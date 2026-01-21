@@ -18,7 +18,7 @@
 #include "translate.h"
 #include "bitmap.h"
 #ifdef FILESYS
-#include "OpenFilesTable.h"
+#include "processfdTable.h"
 #endif
 
 class Lock;
@@ -72,7 +72,7 @@ class AddrSpace {
     List* freeSemIds;
     void* Sbrk(unsigned int n);
     #ifdef FILESYS
-    OpenFilesTable *fdTable;
+    processfdTable *fdTable;
     #endif
   private:
     void UpgradeTidCapacity(int tid);
