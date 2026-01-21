@@ -27,6 +27,12 @@
 #include "userthread.h"
 #include "usersem.h"
 #include "process.h"
+#ifdef FILESYS
+#include "openfile.h"
+#include "filesys.h"
+#include "systemTable.h"
+//static Lock tablePrintLock("tablePrintLock");
+#endif
 
 //----------------------------------------------------------------------
 // UpdatePC : Increments the Program Counter register in order to resume
@@ -63,36 +69,42 @@ static void UpdatePC() {
 //      "which" is the kind of exception.  The list of possible exceptions
 //      are in machine.h.
 //----------------------------------------------------------------------
-static void copyStringFromMachine(int from, char *to, unsigned size)
+static bool copyStringFromMachine(int from, char *to, unsigned size)
 {
-    if (size == 0) return;
+    if (size == 0) return false;
     unsigned i = 0;
     int ch = 0;
     for (; i < size - 1; i++) {
         if (!machine->ReadMem(from + (int)i, 1, &ch)) {
-            break;
+            to[i] = '\0';
+            return false;
         }
         to[i] = (char)ch;
         if (to[i] == '\0') {
-            return;
+            return true;
         }
     }
     to[size - 1] = '\0';
+    return true;
 }
-#ifdef NETWORK
-static void copyBufferFromMachine(int from, char *to, unsigned size) {
-    int ch = 0;
+#if defined(FILESYS) || defined(NETWORK)
+static bool copyBufferFromMachine(int from, char *to, unsigned size) {
+    int val = 0;
     for (unsigned i = 0; i < size; i++) {
-        machine->ReadMem(from + (int)i, 1, &ch);
-        to[i] = (char)ch;
+        if (!machine->ReadMem(from + (int)i, 1, &val)) return false;
+        to[i] = (char)val;
     }
+    return true;
 }
-static void copyBufferToMachine(int to, char *from, unsigned size) {
+
+static bool copyBufferToMachine(int to, const char *from, unsigned size) {
     for (unsigned i = 0; i < size; i++) {
-        machine->WriteMem(to + (int)i, 1, (int)from[i]);
+        if (!machine->WriteMem(to + (int)i, 1, (int)(unsigned char)from[i])) return false;
     }
+    return true;
 }
 #endif
+
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2);
 
@@ -128,7 +140,7 @@ void ExceptionHandler(ExceptionType which) {
             break;
         }
         case SC_Exit: {
-            #ifndef STEP4
+            #if !defined(STEP4) && !defined(STEP5)
                 int x = machine->ReadRegister(4);
                 DEBUG('r', "Shutdown, exit called with status %d.\n", x);
                 interrupt->Halt();
@@ -175,7 +187,7 @@ void ExceptionHandler(ExceptionType which) {
             machine->WriteMem(userPtr, 4, value);
             break;
         }
-        #if defined(STEP3) || defined(STEP4)
+        #if defined(STEP3) || defined(STEP4) || defined(STEP5)
         case SC_UserThreadCreate: {
             int f =  machine->ReadRegister(4);
             int arg = machine->ReadRegister(5);
@@ -194,21 +206,6 @@ void ExceptionHandler(ExceptionType which) {
             machine->WriteRegister(2, ret);
             break;
         }
-        #endif
-        #ifdef STEP4
-        case SC_ForkExec: {
-            int exec = machine->ReadRegister(4);   
-            int ret = do_ForkExec(exec);         
-            machine->WriteRegister(2, ret);
-            break;
-        }
-        case SC_Wait :{
-            int pid = machine->ReadRegister(4);
-            int result = do_Wait(pid);
-            machine->WriteRegister(2, result);
-            break;
-        }
-        #endif
         case SC_SemCreate:{
             int init = machine->ReadRegister(4);
             int id = do_SemCreate(init);
@@ -230,7 +227,20 @@ void ExceptionHandler(ExceptionType which) {
             do_SemV(id);
             break;
         }
-        #ifdef STEP4
+        #endif
+        #if defined(STEP4) || defined(STEP5)
+        case SC_ForkExec: {
+            int exec = machine->ReadRegister(4);   
+            int ret = do_ForkExec(exec);         
+            machine->WriteRegister(2, ret);
+            break;
+        }
+        case SC_Wait :{
+            int pid = machine->ReadRegister(4);
+            int result = do_Wait(pid);
+            machine->WriteRegister(2, result);
+            break;
+        }
         case SC_SBRK:{
             int n = machine->ReadRegister(4);
             int addr = do_sbrk(n);
@@ -407,6 +417,181 @@ void ExceptionHandler(ExceptionType which) {
             break;
 }
         #endif // NETWOR
+        #ifdef FILESYS
+        case SC_Open: {
+            int userAddr = machine->ReadRegister(4);
+            char name[MAX_STRING_SIZE];
+
+            if (!copyStringFromMachine(userAddr, name, MAX_STRING_SIZE)) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            int sector = fileSystem->FindSector(name);
+            if (sector < 0) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            ////tablePrintLock.Acquire();
+            if (!sysTable->Open(sector)) {
+                //tablePrintLock.Release();
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            OpenFile *f = new OpenFile(sector);
+            if (f == NULL) {
+                sysTable->Close(sector);
+                //tablePrintLock.Release();
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            int fd = currentThread->space->fdTable->Add(f, sector);
+            if (fd < 0) {
+                delete f;
+                sysTable->Close(sector);
+                //tablePrintLock.Release();
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            sysTable->Print();
+            currentThread->space->fdTable->Print();
+            //tablePrintLock.Release();
+            machine->WriteRegister(2, fd);
+            break;
+        }
+        case SC_Close: {
+            int fd = machine->ReadRegister(4);
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            //tablePrintLock.Acquire();
+            int sector = currentThread->space->fdTable->Close(fd);
+            if (sector < 0) {
+                //tablePrintLock.Release();
+                machine->WriteRegister(2, -1);
+                break;
+            }
+            sysTable->Close(sector);
+            sysTable->Print();
+            currentThread->space->fdTable->Print();
+            //tablePrintLock.Release();
+            machine->WriteRegister(2, 0);
+            break;
+        }
+
+        case SC_Read: {
+            int userBuf = machine->ReadRegister(4);
+            int size = machine->ReadRegister(5);
+            int fd = machine->ReadRegister(6);
+
+            if (size < 0) { machine->WriteRegister(2, -1); break; }
+            if (size == 0) { machine->WriteRegister(2, 0); break; }
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            OpenFile *f = currentThread->space->fdTable->Get(fd);
+            if (f == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            char *kbuf = new char[size];
+            int n = f->Read(kbuf, size); 
+
+            if (n > 0) {
+                if (!copyBufferToMachine(userBuf, kbuf, (unsigned)n)) {
+                    delete[] kbuf;
+                    machine->WriteRegister(2, -1);
+                    break;
+                }
+            }
+
+            delete[] kbuf;
+            machine->WriteRegister(2, n);
+            break;
+        }
+        case SC_Write: {
+            int userBuf = machine->ReadRegister(4);
+            int size = machine->ReadRegister(5);
+            int fd = machine->ReadRegister(6);
+
+            if (size < 0) { machine->WriteRegister(2, -1); break; }
+            if (size == 0) { machine->WriteRegister(2, 0); break; }
+
+            if (currentThread->space == NULL || currentThread->space->fdTable == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            OpenFile *f = currentThread->space->fdTable->Get(fd);
+            if (f == NULL) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            char *kbuf = new char[size];
+            if (!copyBufferFromMachine(userBuf, kbuf, (unsigned)size)) {
+                delete[] kbuf;
+                machine->WriteRegister(2, -1);
+                break;
+            }
+
+            int n = f->Write(kbuf, size);
+            delete[] kbuf;
+
+            machine->WriteRegister(2, n);
+            break;
+        }
+        case SC_Create: {
+            int userAddr = machine->ReadRegister(4);   // name
+            int initialSize = machine->ReadRegister(5);
+
+            char name[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
+
+            bool ok = fileSystem->Create(name, initialSize);
+            machine->WriteRegister(2, ok ? 0 : -1);
+            break;
+        }
+
+
+        case SC_Mkdir: {
+            int userAddr = machine->ReadRegister(4);
+
+            char name[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
+
+            bool ok = fileSystem->MakeDirectory(name);
+            machine->WriteRegister(2, ok ? 0 : -1);
+            break;
+        }
+
+        case SC_Chdir: {
+            int userAddr = machine->ReadRegister(4);
+
+            char name[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
+
+            bool ok = fileSystem->ChangeDirectory(name);
+            machine->WriteRegister(2, ok ? 0 : -1);
+            break;
+        }
+        #endif
         default: {
             printf("Unexpected user mode exception %d %d\n", which, type);
             ASSERT(FALSE);

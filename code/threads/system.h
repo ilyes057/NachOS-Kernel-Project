@@ -51,7 +51,7 @@ extern Statistics *stats;           // performance metrics
 extern Timer *timer;                // the hardware alarm clock
 extern SynchConsole *synchconsole;
 extern int procCount;
-#ifdef STEP4
+#if defined(STEP4) || defined(STEP5)
 class FrameProvider;
 extern FrameProvider *frameProvider;
 #endif
@@ -74,6 +74,9 @@ extern FileSystem *fileSystem;
 #ifdef FILESYS
 #include "synchdisk.h"
 extern SynchDisk *synchDisk;
+#include "filesys.h"
+class systemTable;
+extern systemTable *sysTable;
 #endif
 
 #ifdef NETWORK

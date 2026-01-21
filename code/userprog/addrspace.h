@@ -17,7 +17,9 @@
 #include "filesys.h"
 #include "translate.h"
 #include "bitmap.h"
-
+#ifdef FILESYS
+#include "processfdTable.h"
+#endif
 
 class Lock;
 class Semaphore;
@@ -69,7 +71,9 @@ class AddrSpace {
     int nextSemId;
     List* freeSemIds;
     void* Sbrk(unsigned int n);
-
+    #ifdef FILESYS
+    processfdTable *fdTable;
+    #endif
   private:
     void UpgradeTidCapacity(int tid);
 
@@ -86,6 +90,8 @@ class AddrSpace {
     List* freeTids;
     unsigned int brk;
     unsigned int heapLimit;
+
+
 };
 
 #endif // ADDRSPACE_H

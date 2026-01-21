@@ -45,18 +45,20 @@
 #define SC_V 24
 #define SC_SBRK 25
 #define SC_Wait 26
-#define SC_ReseauSend     27  
-#define SC_ReseauReceive  28
-#define SC_FtpGet         29
-#define SC_FtpPut         30
-#define SC_FtpList        31
-#define SC_FtpMkdir       32
-#define SC_FtpRmdir       33
-#define SC_FtpDelete      34
-#define SC_FtpRename      35
+#define SC_ReseauSend 27  
+#define SC_ReseauReceive 28
+#define SC_FtpGet 29
+#define SC_FtpPut 30
+#define SC_FtpList 31
+#define SC_FtpMkdir 32
+#define SC_FtpRmdir 33
+#define SC_FtpDelete 34
+#define SC_FtpRename 35
 #define SC_FtpStartServer 36
 #define SC_LocalList 37
 #define SC_LocalCat 38
+#define SC_Mkdir 39
+#define SC_Chdir 40
 #ifdef IN_USER_MODE
 
 // LB: This part is read only on compiling the test/*.c files.
@@ -114,8 +116,11 @@ typedef int OpenFileId;
 #define ConsoleInput 0
 #define ConsoleOutput 1
 
+int Mkdir(const char *name);
+int Chdir(const char *name);
 /* Create a Nachos file, with "name" */
-void Create(char *name);
+//changed prototype t match kernel create function
+int Create(const char *name, int initialSize);
 
 /* Open the Nachos file "name", and return an "OpenFileId" that can
  * be used to read and write to the file.
@@ -123,7 +128,7 @@ void Create(char *name);
 OpenFileId Open(char *name);
 
 /* Write "size" bytes from "buffer" to the open file. */
-void Write(char *buffer, int size, OpenFileId id);
+int Write(char *buffer, int size, OpenFileId id);
 
 /* Read "size" bytes from the open file into "buffer".
  * Return the number of bytes actually read -- if the open file isn't

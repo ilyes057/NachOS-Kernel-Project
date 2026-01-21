@@ -23,6 +23,8 @@
 #include "copyright.h"
 #include "utility.h"
 
+class Lock;
+
 #ifdef FILESYS_STUB			// Temporarily implement calls to 
 					// Nachos file system as calls to UNIX!
 					// See definitions listed under #else
@@ -52,6 +54,7 @@ class OpenFile {
 		}
 
     int Length() { Lseek(file, 0, 2); return Tell(file); }
+    int GetSeekPosition() const { return currentOffset; }
     
   private:
     int file;
@@ -85,10 +88,12 @@ class OpenFile {
 					// file (this interface is simpler 
 					// than the UNIX idiom -- lseek to 
 					// end of file, tell, lseek back 
+    int GetSeekPosition() const;
     
   private:
     FileHeader *hdr;			// Header for this file 
     int seekPosition;			// Current position within the file
+	Lock* seekLock;
 };
 
 #endif // FILESYS

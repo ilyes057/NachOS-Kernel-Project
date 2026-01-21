@@ -4,6 +4,7 @@
 #include "addrspace.h"
 #include "filesys.h"
 #include "synch.h"
+#include "systemTable.h"
 
 static void copyStringFromMachine2(int from, char *to, unsigned size)
 {
@@ -52,6 +53,61 @@ int do_ForkExec(int userFilenameAddr)
     // Create new address space
     AddrSpace *space = new AddrSpace(executable);
     delete executable;
+
+    #ifdef FILESYS
+    AddrSpace *parentSpace = currentThread->space;
+
+    if (parentSpace != nullptr && parentSpace->fdTable != nullptr &&
+        space != nullptr && space->fdTable != nullptr) {
+
+        // Track what we successfully opened in child to rollback on error
+        int openedSectors[MAX_OPEN_FILES];
+        int openedCount = 0;
+
+        for (int fd = 0; fd < MAX_OPEN_FILES; fd++) {
+
+            if (!parentSpace->fdTable->IsUsed(fd)) continue;
+
+            int sector = parentSpace->fdTable->GetHdrSector(fd);
+            if (sector < 0) continue;
+            OpenFile *parentF = parentSpace->fdTable->Get(fd);
+            int parentPos = (parentF != nullptr) ? parentF->GetSeekPosition() : 0;
+
+            if (!sysTable->Open(sector)) {
+                //rollback and delete all previously opened files
+                for (int k = 0; k < openedCount; k++) {
+                    sysTable->Close(openedSectors[k]);
+                }
+                delete space;
+                return -1;
+            }
+
+            OpenFile *childF = new OpenFile(sector);
+            if (childF == nullptr) {
+                sysTable->Close(sector);
+                for (int k = 0; k < openedCount; k++) {
+                    sysTable->Close(openedSectors[k]);
+                }
+                delete space;
+                return -1;
+            }
+            childF->Seek(parentPos);
+            int childFd = space->fdTable->AddAt(fd, childF, sector);
+            if (childFd < 0) {
+                delete childF;
+                sysTable->Close(sector);
+                for (int k = 0; k < openedCount; k++) {
+                    sysTable->Close(openedSectors[k]);
+                }
+                delete space;
+                return -1;
+            }
+
+            openedSectors[openedCount++] = sector;
+        }
+    }
+    #endif
+
 
     // Create new thread
     Thread *t = new Thread(filename);

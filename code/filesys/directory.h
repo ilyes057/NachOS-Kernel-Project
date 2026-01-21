@@ -34,6 +34,7 @@ class DirectoryEntry {
     bool inUse;				// Is this directory entry in use?
     int sector;				// Location on disk to find the 
 					//   FileHeader for this file 
+    int directory;                  
     char name[FileNameMaxLen + 1];	// Text name for file, with +1 for 
 					// the trailing '\0'
 };
@@ -60,8 +61,8 @@ class Directory {
 
     int Find(const char *name);		// Find the sector number of the 
 					// FileHeader for file: "name"
-
-    bool Add(const char *name, int newSector);  // Add a file name into the directory
+    bool Find(const char *name, int *sector, int *isDir);
+    bool Add(const char *name, int newSector, int directory);  // Add a file name into the directory
 
     bool Remove(const char *name);	// Remove a file from the directory
 
@@ -70,6 +71,7 @@ class Directory {
     void Print();			// Verbose print of the contents
 					//  of the directory -- all the file
 					//  names and their contents.
+    bool IsEmpty();      // Check if directory is empty
 
   private:
     int tableSize;			// Number of directory entries

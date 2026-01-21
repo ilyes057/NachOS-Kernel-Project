@@ -9,7 +9,7 @@
 #include "copyright.h"
 #include "../userprog/frameprovider.h"
 #include <unistd.h>    
-#include <sys/stat.h>  
+#include <sys/stat.h>
 #include <sys/types.h>
 
 // --- NOUVEAUX INCLUDES RESEAU ---
@@ -20,6 +20,7 @@
 #include "../network/filetransfer.h"
 #endif
 
+#include "systemTable.h"
 // This defines *all* of the global data structures used by Nachos.
 // These are all initialized and de-allocated by this file.
 
@@ -45,6 +46,7 @@ FileSystem *fileSystem;
 
 #ifdef FILESYS
 SynchDisk *synchDisk;
+systemTable *sysTable;
 #endif
 
 #ifdef USER_PROGRAM // requires either FILESYS or FILESYS_STUB
@@ -104,6 +106,11 @@ void Initialize(int argc, char **argv) {
             randomYield = TRUE;
             argCount = 2;
         }
+#ifdef FILESYS_NEEDED
+        else if (!strcmp(*argv, "-f")) {
+            format = TRUE;
+        }
+#endif
 #ifdef NETWORK
         if (!strcmp(*argv, "-l")) {
             ASSERT(argc > 1);
@@ -117,11 +124,12 @@ void Initialize(int argc, char **argv) {
 #endif
     }
 
-    DebugInit(debugArgs);
-    stats = new Statistics();
-    interrupt = new Interrupt;
-    scheduler = new Scheduler();
-    if (randomYield)
+    DebugInit(debugArgs);        // initialize DEBUG messages
+    setvbuf(stdout, NULL, _IONBF, 0);
+    stats = new Statistics();    // collect statistics
+    interrupt = new Interrupt;   // start up interrupt handling
+    scheduler = new Scheduler(); // initialize the ready queue
+    if (randomYield)             // start the timer (if needed)
         timer = new Timer(TimerInterruptHandler, 0, randomYield);
 
     threadToBeDestroyed = NULL;
@@ -140,9 +148,15 @@ void Initialize(int argc, char **argv) {
     machine = new Machine(debugUserProg);
     synchconsole = new SynchConsole(NULL, NULL);
 #endif
+#if defined(STEP4) || defined(STEP5)
+    frameProvider = new FrameProvider(NumPhysPages);
+    InitProcessSystem();
+
+#endif
 
 #ifdef FILESYS
     synchDisk = new SynchDisk("DISK");
+    sysTable = new systemTable(10);
 #endif
 
 #ifdef FILESYS_NEEDED
@@ -190,11 +204,9 @@ void Cleanup() {
     if (postOffice) delete postOffice;
 #endif
 
-#ifdef STEP4
-    if (frameProvider) {
-        delete frameProvider;
-        frameProvider = nullptr;
-    }
+#if defined(STEP4) || defined(STEP5)
+    delete frameProvider;
+    frameProvider = nullptr;
 #endif
 
 #ifdef USER_PROGRAM
@@ -208,6 +220,7 @@ void Cleanup() {
 
 #ifdef FILESYS
     delete synchDisk;
+    delete sysTable;
 #endif
 
     delete timer;

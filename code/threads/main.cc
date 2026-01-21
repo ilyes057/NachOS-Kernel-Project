@@ -130,7 +130,9 @@ int main(int argc, char **argv) {
             argCount = 2;
         } else if (!strcmp(*argv, "-r")) { // remove Nachos file
             ASSERT(argc > 1);
-            fileSystem->Remove(*(argv + 1));
+            bool ok = fileSystem->Remove(*(argv + 1));
+            if (ok) printf("Remove '%s' : SUCCESS\n", *(argv + 1));
+            else    printf("Remove '%s' : FAILED\n", *(argv + 1));
             argCount = 2;
         } else if (!strcmp(*argv, "-l")) { // list Nachos directory
             fileSystem->List();
@@ -138,6 +140,18 @@ int main(int argc, char **argv) {
             fileSystem->Print();
         } else if (!strcmp(*argv, "-t")) { // performance test
             PerformanceTest();
+        } else if (!strcmp(*argv, "-mkdir")) { // make a subdirectory
+            ASSERT(argc > 1);
+            bool ok = fileSystem->MakeDirectory(*(argv + 1));
+            if (ok) printf("mkdir '%s' : SUCCESS\n", *(argv + 1));
+            else    printf("mkdir '%s' : FAILED\n", *(argv + 1));
+            argCount = 2;
+        } else if (!strcmp(*argv, "-cd")) { // change current directory
+            ASSERT(argc > 1);
+            bool ok = fileSystem->ChangeDirectory(*(argv + 1));
+            if (ok) printf("cd '%s' : SUCCESS\n", *(argv + 1));
+            else    printf("cd '%s' : FAILED\n", *(argv + 1));
+            argCount = 2;
         }
 #endif // FILESYS
 
