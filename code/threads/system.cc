@@ -137,6 +137,7 @@ void Initialize(int argc, char **argv) {
     }
 
     DebugInit(debugArgs);        // initialize DEBUG messages
+    //setvbuf(stdout, NULL, _IONBF, 0);
     stats = new Statistics();    // collect statistics
     interrupt = new Interrupt;   // start up interrupt handling
     scheduler = new Scheduler(); // initialize the ready queue
