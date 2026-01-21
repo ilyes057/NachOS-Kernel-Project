@@ -78,7 +78,13 @@ extern SynchDisk *synchDisk;
 
 #ifdef NETWORK
 #include "post.h"
-extern PostOffice *postOffice;
+#include "../network/reliablepost.h"
+#include "../network/varpost.h"
+#include "../network/filetransfer.h"
+extern PostOffice* postOffice;
+extern ReliablePostOffice* rpo;
+extern VarPostOffice* vpo;
+extern FileTransfer* fileTransfer;
 #endif
 
 #endif // SYSTEM_H

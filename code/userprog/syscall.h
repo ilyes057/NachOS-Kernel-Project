@@ -45,7 +45,18 @@
 #define SC_V 24
 #define SC_SBRK 25
 #define SC_Wait 26
-
+#define SC_ReseauSend     27  
+#define SC_ReseauReceive  28
+#define SC_FtpGet         29
+#define SC_FtpPut         30
+#define SC_FtpList        31
+#define SC_FtpMkdir       32
+#define SC_FtpRmdir       33
+#define SC_FtpDelete      34
+#define SC_FtpRename      35
+#define SC_FtpStartServer 36
+#define SC_LocalList 37
+#define SC_LocalCat 38
 #ifdef IN_USER_MODE
 
 // LB: This part is read only on compiling the test/*.c files.
@@ -155,6 +166,19 @@ void SemDestroy(int semId);
 void P(int semId);
 void V(int semId);
 void* Sbrk(unsigned int n);
+void ReseauSend(int to, char *buffer, int size);
+int ReseauReceive(char *buffer, int maxSize, int *from);
+/* --- FONCTIONS FTP --- */
+void FtpGet(int to, char *remote, char *local);
+void FtpPut(int to, char *local, char *remote);
+void FtpList(int to, char *remotePath);
+void FtpMkdir(int to, char *remotePath);
+void FtpRmdir(int to, char *remotePath);
+void FtpDelete(int to, char *remoteFile);
+void FtpRename(int to, char *oldName, char *newName);
+void FtpStartServer();
+void LocalList(char *path);
+void LocalCat(char *filename);
 
 #endif // IN_USER_MODE
 

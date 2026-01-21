@@ -54,15 +54,16 @@
 #include "utility.h"
 
 // External functions used by this file
-
-extern void ThreadTest(void),
-    Copy(const char *unixFile, const char *nachosFile);
+extern void ThreadTest(void), Copy(const char *unixFile, const char *nachosFile);
 extern void Print(char *file), PerformanceTest(void);
 extern void StartProcess(char *file), ConsoleTest(char *in, char *out);
 extern void SynchConsoleTest(char *in, char *out);
 extern void MailTest(int networkID);
-extern void ReliableTest(int farAddr);
-
+extern void FileTransferTest(int farAddr);
+extern void ReliablePostTest(int farAddr);
+extern void VarPostTest(int farAddr);
+extern void RingTest();
+extern void InteractiveTest(int farAddr);
 //----------------------------------------------------------------------
 // main
 //      Bootstrap the operating system kernel.
@@ -78,9 +79,10 @@ extern void ReliableTest(int farAddr);
 //----------------------------------------------------------------------
 
 int main(int argc, char **argv) {
-    int argCount; // the number of arguments
-    // for a particular command
-
+    int argCount;
+    #ifdef NETWORK
+    double reliability = 1.0; 
+    #endif
     DEBUG('t', "Entering main");
     (void)Initialize(argc, argv);
 
@@ -105,19 +107,8 @@ int main(int argc, char **argv) {
                 ConsoleTest(*(argv + 1), *(argv + 2));
                 argCount = 3;
             }
-            interrupt->Halt(); // once we start the console, then
-                               // Nachos will loop forever waiting
-                               // for console input
-        } else if (!strcmp(*argv, "-sc")){
-            if (argc == 1)
-                SynchConsoleTest(NULL, NULL);
-            else {
-                ASSERT(argc > 2);
-                SynchConsoleTest(*(argv + 1), *(argv + 2));
-                argCount = 3;
-            }
-        }
-        else if (!strcmp(*argv, "-sc")) { // test the synchronous console
+            interrupt->Halt();
+        } else if (!strcmp(*argv, "-sc")) { 
             if (argc == 1)
                 SynchConsoleTest(NULL, NULL);
             else {
@@ -127,7 +118,6 @@ int main(int argc, char **argv) {
             }
             interrupt->Halt();
         }
-
 #endif // USER_PROGRAM
 #ifdef FILESYS
         if (!strcmp(*argv, "-cp")) { // copy from UNIX to Nachos
@@ -150,25 +140,66 @@ int main(int argc, char **argv) {
             PerformanceTest();
         }
 #endif // FILESYS
+
 #ifdef NETWORK
+        if (!strcmp(*argv, "-rel")) {
+            ASSERT(argc > 1);
+            reliability = atof(*(argv + 1)); // Convertit string -> double
+            argCount = 2;
+        }
+
         if (!strcmp(*argv, "-o")) {
             ASSERT(argc > 1);
-            Delay(2); // delay for 2 seconds
-            // to give the user time to
-            // start up another nachos
-            ReliableTest(atoi(*(argv + 1)));
-            argCount = 2;
+            Delay(2);
+
+            // Appliquer la fiabilité demandée
+            // On supprime le PostOffice par défaut et on recrée le bon.
+            if (postOffice != NULL) {
+                int myAddr = postOffice->GetNetAddr();
+                delete postOffice;
+                postOffice = new PostOffice(myAddr, reliability, 10);
+            }
+
+            int testID = 1; 
+            int farAddr = atoi(*(argv + 1));
+
+            // On regarde s'il y a un argument "-t" après
+            if (argc > 3 && !strcmp(*(argv + 2), "-t")) {
+                 testID = atoi(*(argv + 3));
+                 argCount = 4; 
+            } else {
+                 argCount = 2;
+            }
+
+            switch(testID) {
+                case 1:
+                    printf(">>> Lancement FileTransferTest (Rel: %.2f)\n", reliability);
+                    FileTransferTest(farAddr);
+                    break;
+                case 2:
+                    printf(">>> Lancement ReliablePostTest (Rel: %.2f)\n", reliability);
+                    ReliablePostTest(farAddr);
+                    break;
+                case 3:
+                    printf(">>> Lancement VarPostTest (Rel: %.2f)\n", reliability);
+                    VarPostTest(farAddr);
+                    break;
+                case 4:
+                    printf(">>> Lancement RingTest (Rel: %.2f)\n", reliability);
+                    RingTest();
+                    break;
+                case 5:
+                    printf(">>> Lancement InteractiveTest (Rel: %.2f)\n", reliability);
+                    InteractiveTest(farAddr);
+                    break;
+                default:
+                    printf("Test ID inconnu. 1=File, 2=Reliable, 3=Var, 4=Ring\n");
+                    break;
+            }
         }
 #endif // NETWORK
     }
 
-    currentThread->Finish(); // NOTE: if the procedure "main"
-    // returns, then the program "nachos"
-    // will exit (as any other normal program
-    // would).  But there may be other
-    // threads on the ready list.  We switch
-    // to those threads by saying that the
-    // "main" thread is finished, preventing
-    // it from returning.
-    return (0); // Not reached...
+    currentThread->Finish();
+    return (0);
 }

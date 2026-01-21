@@ -275,4 +275,99 @@ SBRK:
 __main:
         j       $31
         .end    __main
+/* --- RESEAU GENERIQUE --- */
+    .globl ReseauSend
+    .ent   ReseauSend
+ReseauSend:
+    addiu $2,$0,SC_ReseauSend
+    syscall
+    j     $31
+    .end  ReseauSend
+
+    .globl ReseauReceive
+    .ent   ReseauReceive
+ReseauReceive:
+    addiu $2,$0,SC_ReseauReceive
+    syscall
+    j     $31
+    .end  ReseauReceive
+
+/* --- FTP --- */
+    .globl FtpGet
+    .ent   FtpGet
+FtpGet:
+    addiu $2,$0,SC_FtpGet
+    syscall
+    j     $31
+    .end  FtpGet
+
+    .globl FtpPut
+    .ent   FtpPut
+FtpPut:
+    addiu $2,$0,SC_FtpPut
+    syscall
+    j     $31
+    .end  FtpPut
+
+    .globl FtpList
+    .ent   FtpList
+FtpList:
+    addiu $2,$0,SC_FtpList
+    syscall
+    j     $31
+    .end  FtpList
+
+    .globl FtpMkdir
+    .ent   FtpMkdir
+FtpMkdir:
+    addiu $2,$0,SC_FtpMkdir
+    syscall
+    j     $31
+    .end  FtpMkdir
+
+    .globl FtpRmdir
+    .ent   FtpRmdir
+FtpRmdir:
+    addiu $2,$0,SC_FtpRmdir
+    syscall
+    j     $31
+    .end  FtpRmdir
+
+    .globl FtpDelete
+    .ent   FtpDelete
+FtpDelete:
+    addiu $2,$0,SC_FtpDelete
+    syscall
+    j     $31
+    .end  FtpDelete
+
+    .globl FtpRename
+    .ent   FtpRename
+FtpRename:
+    addiu $2,$0,SC_FtpRename
+    syscall
+    j     $31
+    .end  FtpRename
+
+    .globl FtpStartServer
+    .ent   FtpStartServer
+FtpStartServer:
+    addiu $2,$0,SC_FtpStartServer
+    syscall
+    j     $31
+    .end  FtpStartServer
+.globl LocalList
+    .ent   LocalList
+LocalList:
+    addiu $2, $0, SC_LocalList
+    syscall
+    j     $31
+    .end   LocalList
+.globl LocalCat
+    .ent   LocalCat
+LocalCat:
+    addiu $2, $0, SC_LocalCat
+    syscall
+    j     $31
+    .end   LocalCat
 

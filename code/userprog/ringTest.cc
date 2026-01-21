@@ -1,13 +1,12 @@
-
 #include "system.h"
-#include "network.h"
-#include "post.h"
 #include "interrupt.h"
+#include "network.h"            
+#include "../network/post.h"    
 
 #include <stdio.h>
 #include <string.h>
 
-#define MAX_MACHINES 4
+#define MAX_MACHINES_RING 4
 static const char *STOP_MSG = "STOP";
 static const char *ACK_MSG  = "ACK";
 
@@ -16,53 +15,42 @@ void RingTest() {
     MailHeader outMailHdr, inMailHdr;
     char buffer[MaxMailSize];
 
-    int me   = postOffice->GetNetAddr();
-    int next = (me + 1) % MAX_MACHINES;
+    int me = postOffice->GetNetAddr();
+    int next = (me + 1) % MAX_MACHINES_RING;
 
-    printf("[RingTest] me=%d next=%d N=%d\n", me, next, MAX_MACHINES);
-    fflush(stdout);
+    printf("[RingTest] me=%d next=%d\n", me, next);
     outMailHdr.from = 1;
     outMailHdr.to = 0;
 
     if (me == 0) {
-        Delay(1);
-
+        Delay(10);
         char msg[MaxMailSize];
-        snprintf(msg, sizeof(msg), "TOKEN %d", 0);
+        snprintf(msg, sizeof(msg), "TOKEN 0");
 
         outPktHdr.to = next;
         outMailHdr.to = 0;
         outMailHdr.length = strlen(msg) + 1;
 
         postOffice->Send(outPktHdr, outMailHdr, msg);
-        printf("[RingTest] 0 injected \"%s\" -> machine %d (mbox 0)\n", msg, next);
-        fflush(stdout);
-
+        printf("[RingTest] 0 injected token -> %d\n", next);
+        
+        // Wait ACK
         postOffice->Receive(1, &inPktHdr, &inMailHdr, buffer);
-        printf("[RingTest] 0 got ACK \"%s\" from %d, box %d\n",
-               buffer, inPktHdr.from, inMailHdr.from);
-        fflush(stdout);
     }
 
     while (true) {
         postOffice->Receive(0, &inPktHdr, &inMailHdr, buffer);
 
-        // ----- STOP -----
         if (strncmp(buffer, STOP_MSG, 4) == 0) {
             if (me == 0) {
-                printf("[RingTest] 0 received STOP back from %d -> halting\n", inPktHdr.from);
-                fflush(stdout);
+                printf("[RingTest] 0 received STOP. Halting.\n");
                 interrupt->Halt();
             } else {
-                printf("[RingTest] %d got STOP from %d -> forward to %d then halt\n",
-                       me, inPktHdr.from, next);
-                fflush(stdout);
-
+                printf("[RingTest] %d forward STOP -> %d\n", me, next);
                 outPktHdr.to = next;
                 outMailHdr.to = 0;
                 outMailHdr.from = 1;
                 outMailHdr.length = strlen(STOP_MSG) + 1;
-
                 postOffice->Send(outPktHdr, outMailHdr, STOP_MSG);
                 interrupt->Halt();
             }
@@ -70,24 +58,15 @@ void RingTest() {
 
         int hops = -1;
         if (sscanf(buffer, "TOKEN %d", &hops) == 1) {
-            printf("[RingTest] %d got TOKEN %d from %d (sender box %d)\n",
-                   me, hops, inPktHdr.from, inMailHdr.from);
-            fflush(stdout);
+            // Send ACK
             outPktHdr.to = inPktHdr.from;
             outMailHdr.to = inMailHdr.from;
             outMailHdr.from = 1;
             outMailHdr.length = strlen(ACK_MSG) + 1;
             postOffice->Send(outPktHdr, outMailHdr, ACK_MSG);
 
-            printf("[RingTest] %d sent ACK -> machine %d, box %d\n",
-                   me, outPktHdr.to, outMailHdr.to);
-            fflush(stdout);
-            for (int k = 0; k < 50; k++) currentThread->Yield();
-
-           if (me == 0 && hops+1 >= MAX_MACHINES) {
-                printf("[RingTest] 0 full round detected (hops=%d) -> send STOP, wait STOP back\n", hops);
-                fflush(stdout);
-
+            if (me == 0 && hops+1 >= MAX_MACHINES_RING) {
+                printf("[RingTest] Full round. Stopping.\n");
                 outPktHdr.to = next;
                 outMailHdr.to = 0;
                 outMailHdr.from = 1;
@@ -95,28 +74,19 @@ void RingTest() {
                 postOffice->Send(outPktHdr, outMailHdr, STOP_MSG);
                 continue;
             }
+
             char msg[MaxMailSize];
             snprintf(msg, sizeof(msg), "TOKEN %d", hops + 1);
-
             outPktHdr.to = next;
             outMailHdr.to = 0;
             outMailHdr.from = 1;
             outMailHdr.length = strlen(msg) + 1;
-
             postOffice->Send(outPktHdr, outMailHdr, msg);
-
-            printf("[RingTest] %d forwarded \"%s\" -> machine %d (mbox 0)\n",
-                   me, msg, next);
-            fflush(stdout);
-
+            printf("[RingTest] %d forwarded token -> %d\n", me, next);
+            printf("Machine 0: Attente de 10s avant d'injecter le jeton vers %d...\n", next);
+            Delay(10);
+            // Wait ACK
             postOffice->Receive(1, &inPktHdr, &inMailHdr, buffer);
-            printf("[RingTest] %d got ACK \"%s\" from %d, box %d\n",
-                   me, buffer, inPktHdr.from, inMailHdr.from);
-            fflush(stdout);
-
-        } else {
-            printf("[RingTest] %d got unknown msg on mbox0: \"%s\"\n", me, buffer);
-            fflush(stdout);
         }
     }
 }

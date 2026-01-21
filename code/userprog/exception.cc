@@ -79,7 +79,20 @@ static void copyStringFromMachine(int from, char *to, unsigned size)
     }
     to[size - 1] = '\0';
 }
-
+#ifdef NETWORK
+static void copyBufferFromMachine(int from, char *to, unsigned size) {
+    int ch = 0;
+    for (unsigned i = 0; i < size; i++) {
+        machine->ReadMem(from + (int)i, 1, &ch);
+        to[i] = (char)ch;
+    }
+}
+static void copyBufferToMachine(int to, char *from, unsigned size) {
+    for (unsigned i = 0; i < size; i++) {
+        machine->WriteMem(to + (int)i, 1, (int)from[i]);
+    }
+}
+#endif
 void ExceptionHandler(ExceptionType which) {
     int type = machine->ReadRegister(2);
 
@@ -225,7 +238,175 @@ void ExceptionHandler(ExceptionType which) {
             break;
         }
         #endif
+        #ifdef NETWORK
+        
+        // --- Bas Niveau (VarPost) ---
+        case SC_ReseauSend: {
+            int to = machine->ReadRegister(4);
+            int addrBuf = machine->ReadRegister(5);
+            int size = machine->ReadRegister(6);
 
+            char *kBuf = new char[size];
+            copyBufferFromMachine(addrBuf, kBuf, size);
+            
+            vpo->SendLong(to, kBuf, size);
+            
+            delete[] kBuf;
+            break;
+        }
+        case SC_ReseauReceive: {
+            int addrBuf = machine->ReadRegister(4);
+            int maxSize = machine->ReadRegister(5);
+            int addrFrom = machine->ReadRegister(6);
+
+            int from = -1;
+            char *kBuf = NULL;
+            // Bloquant
+            int recSize = vpo->ReceiveLongAlloc(&from, &kBuf);
+
+            if (recSize > 0) {
+                int copySize = (recSize < maxSize) ? recSize : maxSize;
+                copyBufferToMachine(addrBuf, kBuf, copySize);
+                // Ecrire l'ID de l'expéditeur
+                machine->WriteMem(addrFrom, 4, from); 
+                
+                delete[] kBuf;
+                machine->WriteRegister(2, copySize);
+            } else {
+                machine->WriteRegister(2, -1);
+            }
+            break;
+        }
+
+        // --- FTP (FileTransfer) ---
+        case SC_LocalList: {
+            char command[128];
+            // On récupère l'ID de la machine actuelle (1 pour serveur, 2 pour client, etc.)
+            int netname = postOffice->GetNetAddr(); 
+            
+            char myDir[32];
+            if (netname == 1) {
+                strcpy(myDir, "server_dir");
+            } else {
+                sprintf(myDir, "client%d_dir", netname);
+            }
+
+            printf("\n--- Contenu de la Sandbox (%s) ---\n", myDir);
+            
+            // On force 'ls' à regarder DANS le dossier spécifique
+            sprintf(command, "ls -F %s", myDir); 
+            system(command);
+            
+            printf("----------------------------------\n");
+            break;
+        }
+        case SC_FtpPut: {
+            int to = machine->ReadRegister(4);
+            int addrL = machine->ReadRegister(5);
+            int addrR = machine->ReadRegister(6);
+            char l[128], r[128];
+            copyStringFromMachine(addrL, l, 128);
+            copyStringFromMachine(addrR, r, 128);
+            
+            fileTransfer->RequestPut(to, l, r);
+            break;
+        }
+        case SC_FtpGet: {
+            int to = machine->ReadRegister(4);
+            int addrR = machine->ReadRegister(5);
+            int addrL = machine->ReadRegister(6);
+            char l[128], r[128];
+            copyStringFromMachine(addrR, r, 128);
+            copyStringFromMachine(addrL, l, 128);
+            
+            fileTransfer->RequestGet(to, r, l);
+            break;
+        }
+        case SC_FtpList: {
+            int to = machine->ReadRegister(4);
+            int addrP = machine->ReadRegister(5);
+            char p[128];
+            copyStringFromMachine(addrP, p, 128);
+            
+            fileTransfer->RequestList(to, p);
+            break;
+        }
+        case SC_FtpMkdir: {
+            int to = machine->ReadRegister(4);
+            int addrP = machine->ReadRegister(5);
+            char p[128];
+            copyStringFromMachine(addrP, p, 128);
+            
+            fileTransfer->RequestMkdir(to, p);
+            break;
+        }
+        case SC_FtpRmdir: {
+            int to = machine->ReadRegister(4);
+            int addrP = machine->ReadRegister(5);
+            char p[128];
+            copyStringFromMachine(addrP, p, 128);
+            
+            fileTransfer->RequestRmdir(to, p);
+            break;
+        }
+        case SC_FtpDelete: {
+            int to = machine->ReadRegister(4);
+            int addrP = machine->ReadRegister(5);
+            char p[128];
+            copyStringFromMachine(addrP, p, 128);
+            
+            fileTransfer->RequestDelete(to, p);
+            break;
+        }
+        case SC_FtpRename: {
+            int to = machine->ReadRegister(4);
+            int addrOld = machine->ReadRegister(5);
+            int addrNew = machine->ReadRegister(6);
+            char o[128], n[128];
+            copyStringFromMachine(addrOld, o, 128);
+            copyStringFromMachine(addrNew, n, 128);
+            
+            fileTransfer->RequestRename(to, o, n);
+            break;
+        }
+        case SC_FtpStartServer: {
+            // Attention: Fonction bloquante (boucle infinie)
+            fileTransfer->StartServer(); 
+            break;
+        }
+        
+        case SC_LocalCat: {
+            int userAddr = machine->ReadRegister(4);
+            char fileName[64];
+            char command[128];
+            int val;
+
+            // 1. Lire le nom du fichier depuis la mémoire utilisateur vers le noyau
+            for (int i = 0; i < 63; i++) {
+                if (!machine->ReadMem(userAddr + i, 1, &val)) break;
+                fileName[i] = (char)val;
+                if (fileName[i] == '\0') break;
+            }
+            fileName[63] = '\0'; // Sécurité
+
+            // 2. Identifier le dossier sandbox (client2_dir ou server_dir)
+            int netname = postOffice->GetNetAddr();
+            char myDir[32];
+            if (netname == 1) strcpy(myDir, "server_dir");
+            else sprintf(myDir, "client%d_dir", netname);
+
+            // 3. Exécuter la commande Linux
+            printf("\n--- Contenu de %s/%s ---\n", myDir, fileName);
+            sprintf(command, "cat %s/%s", myDir, fileName);
+            
+            // On lance la commande système
+            if (system(command) != 0) {
+                printf("Erreur : Impossible d'afficher le fichier (vérifiez le nom).\n");
+            }
+            
+            break;
+}
+        #endif // NETWOR
         default: {
             printf("Unexpected user mode exception %d %d\n", which, type);
             ASSERT(FALSE);
