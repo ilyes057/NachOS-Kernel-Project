@@ -31,13 +31,17 @@ void StartProcess(char *filename) {
     }
     space = new AddrSpace(executable);
     
-    // Assign PID to initial process
+    // Assign PID only when the process system is initialized
+    #if defined(STEP4) || defined(STEP5) || defined(NETWORK)
     space->pid = AllocPid();
     processTable[space->pid].space = space;
     
     processTableLock->Acquire();
     procCount++;
     processTableLock->Release();
+    #else
+    space->pid = 0;
+    #endif
 
     currentThread->space = space;
 
