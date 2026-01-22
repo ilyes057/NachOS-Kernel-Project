@@ -462,8 +462,8 @@ void ExceptionHandler(ExceptionType which) {
                 break;
             }
 
-            sysTable->Print();
-            currentThread->space->fdTable->Print();
+            // sysTable->Print();
+            //currentThread->space->fdTable->Print();
             //tablePrintLock.Release();
             machine->WriteRegister(2, fd);
             break;
@@ -484,8 +484,8 @@ void ExceptionHandler(ExceptionType which) {
                 break;
             }
             sysTable->Close(sector);
-            sysTable->Print();
-            currentThread->space->fdTable->Print();
+            //sysTable->Print();
+            //currentThread->space->fdTable->Print();
             //tablePrintLock.Release();
             machine->WriteRegister(2, 0);
             break;
@@ -543,7 +543,22 @@ void ExceptionHandler(ExceptionType which) {
                 machine->WriteRegister(2, -1);
                 break;
             }
-
+            int hdrSector = currentThread->space->fdTable->GetHdrSector(fd);
+            if (hdrSector < 0) {
+                machine->WriteRegister(2, -1);
+                break;
+            }
+            int pos     = f->GetSeekPosition();
+            int fileLen = f->Length();
+            int newEnd  = pos + size;
+            if (newEnd > fileLen) {
+                bool ok = fileSystem->ExtendFile(hdrSector, newEnd);
+                if (!ok) {
+                    machine->WriteRegister(2, -1);
+                    break;
+                }
+                f->replaceHeader(hdrSector);
+            }
             char *kbuf = new char[size];
             if (!copyBufferFromMachine(userBuf, kbuf, (unsigned)size)) {
                 delete[] kbuf;
@@ -558,13 +573,12 @@ void ExceptionHandler(ExceptionType which) {
             break;
         }
         case SC_Create: {
-            int userAddr = machine->ReadRegister(4);   // name
-            int initialSize = machine->ReadRegister(5);
+            int userAddr = machine->ReadRegister(4);
 
             char name[MAX_STRING_SIZE];
             copyStringFromMachine(userAddr, name, MAX_STRING_SIZE);
 
-            bool ok = fileSystem->Create(name, initialSize);
+            bool ok = fileSystem->Create(name, 0);
             machine->WriteRegister(2, ok ? 0 : -1);
             break;
         }

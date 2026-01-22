@@ -36,7 +36,7 @@ int main() {
     int i;
     int tids[NUM_THREADS];
 
-    int c = Create(name, 0);
+    int c = Create(name);
     PutString("Create -> ");
     PutInt(c);
     PutChar('\n');

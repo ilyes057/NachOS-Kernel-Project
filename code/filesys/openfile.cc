@@ -213,3 +213,11 @@ OpenFile::GetSeekPosition() const
 {
     return seekPosition;
 }
+
+void
+OpenFile::replaceHeader(int hdrSector)
+{
+    seekLock->Acquire();
+    hdr->FetchFrom(hdrSector);
+    seekLock->Release();
+}

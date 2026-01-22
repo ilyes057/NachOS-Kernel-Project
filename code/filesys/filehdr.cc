@@ -6,8 +6,8 @@
 //	file's data is stored.  We implement this as a fixed size
 //	table of pointers -- each entry in the table points to the 
 //	disk sector containing that portion of the file data
-//	(in other words, there are no indirect or doubly indirect 
-//	blocks). The table size is chosen so that the file header
+//	(in other words, we use a single level of indirection).
+//	The table size is chosen so that the file header
 //	will be just big enough to fit in one disk sector, 
 //
 //      Unlike in a real system, we do not keep track of file permissions, 
@@ -41,13 +41,35 @@
 bool
 FileHeader::Allocate(BitMap *freeMap, int fileSize)
 { 
+    if (fileSize < 0 || fileSize > (int)MaxFileSize)
+        return FALSE;
     numBytes = fileSize;
     numSectors  = divRoundUp(fileSize, SectorSize);
-    if (freeMap->NumClear() < numSectors)
-	return FALSE;		// not enough space
+    int numIndirectBlocks = divRoundUp(numSectors, NumIndirect);
 
-    for (int i = 0; i < numSectors; i++)
-	dataSectors[i] = freeMap->Find();
+    if (numIndirectBlocks > (int)NumDirect)
+        return FALSE;
+
+    if (freeMap->NumClear() < (numSectors + numIndirectBlocks))
+	return FALSE;
+
+    int sectorsAllocated = 0;
+    for (int i = 0; i < numIndirectBlocks; i++) {
+        dataSectors[i] = freeMap->Find();
+
+        int indirect[NumIndirect];
+        for (unsigned int j = 0; j < NumIndirect; j++)
+            indirect[j] = -1;
+
+        for (unsigned int j = 0; j < NumIndirect && sectorsAllocated < numSectors; j++) {
+            indirect[j] = freeMap->Find();
+            sectorsAllocated++;
+        }
+        synchDisk->WriteSector(dataSectors[i], (char *)indirect);
+    }
+
+    for (unsigned int i = numIndirectBlocks; i < NumDirect; i++)
+        dataSectors[i] = -1;
     return TRUE;
 }
 
@@ -61,10 +83,29 @@ FileHeader::Allocate(BitMap *freeMap, int fileSize)
 void 
 FileHeader::Deallocate(BitMap *freeMap)
 {
-    for (int i = 0; i < numSectors; i++) {
-	ASSERT(freeMap->Test((int) dataSectors[i]));  // ought to be marked!
-	freeMap->Clear((int) dataSectors[i]);
+    int numIndirectBlocks = divRoundUp(numSectors, NumIndirect);
+    int sectorsFreed = 0;
+
+    for (int i = 0; i < numIndirectBlocks; i++) {
+        int indirSector = dataSectors[i];
+        ASSERT(indirSector >= 0);
+        ASSERT(freeMap->Test(indirSector));
+
+        int indirect[NumIndirect];
+        synchDisk->ReadSector(indirSector, (char *)indirect);
+
+        for (unsigned int j = 0; j < NumIndirect && sectorsFreed < numSectors; j++) {
+            int data = indirect[j];
+            ASSERT(data >= 0);
+            ASSERT(freeMap->Test(data));
+            freeMap->Clear(data);
+            sectorsFreed++;
+        }
+
+        freeMap->Clear(indirSector);
     }
+
+    ASSERT(sectorsFreed == numSectors);
 }
 
 //----------------------------------------------------------------------
@@ -106,7 +147,17 @@ FileHeader::WriteBack(int sector)
 int
 FileHeader::ByteToSector(int offset)
 {
-    return(dataSectors[offset / SectorSize]);
+    int sectorIndex = offset / SectorSize;
+    int indirIndex  = sectorIndex / NumIndirect;
+    int indirOffset = sectorIndex % NumIndirect;
+
+    ASSERT(indirIndex >= 0 && indirIndex < (int)NumDirect);
+    ASSERT(dataSectors[indirIndex] >= 0);
+
+    int indirect[NumIndirect];
+    synchDisk->ReadSector(dataSectors[indirIndex], (char *)indirect);
+
+    return indirect[indirOffset];
 }
 
 //----------------------------------------------------------------------
@@ -134,10 +185,10 @@ FileHeader::Print()
 
     printf("FileHeader contents.  File size: %d.  File blocks:\n", numBytes);
     for (i = 0; i < numSectors; i++)
-	printf("%d ", dataSectors[i]);
+	printf("%d ", ByteToSector(i * SectorSize));
     printf("\nFile contents:\n");
     for (i = k = 0; i < numSectors; i++) {
-	synchDisk->ReadSector(dataSectors[i], data);
+	synchDisk->ReadSector(ByteToSector(i * SectorSize), data);
         for (j = 0; (j < SectorSize) && (k < numBytes); j++, k++) {
 	    if ('\040' <= data[j] && data[j] <= '\176')   // isprint(data[j])
 		printf("%c", data[j]);
@@ -147,4 +198,71 @@ FileHeader::Print()
         printf("\n"); 
     }
     delete [] data;
+}
+
+bool
+FileHeader::Extend(BitMap *freeMap, int newFileSize)
+{
+    if (newFileSize < 0 || newFileSize > (int)MaxFileSize)
+        return FALSE;
+
+    int oldNumSectors = numSectors;
+    int newNumSectors = divRoundUp(newFileSize, SectorSize);
+
+    int oldIndirectBlocks = divRoundUp(oldNumSectors, NumIndirect);
+    int newIndirectBlocks = divRoundUp(newNumSectors, NumIndirect);
+
+    if (newIndirectBlocks > (int)NumDirect)
+        return FALSE;
+
+    int extraData  = newNumSectors - oldNumSectors;
+    int extraIndir = newIndirectBlocks - oldIndirectBlocks;
+
+    if (freeMap->NumClear() < (extraData + extraIndir))
+        return FALSE;
+
+    char zeros[SectorSize];
+    bzero(zeros, SectorSize);
+
+    for (int i = oldIndirectBlocks; i < newIndirectBlocks; i++) {
+        int indirSector = freeMap->Find();
+        dataSectors[i] = indirSector;
+
+        int indir[NumIndirect];
+        for (unsigned int j = 0; j < NumIndirect; j++)
+            indir[j] = -1;
+
+        synchDisk->WriteSector(indirSector, (char *)indir);
+    }
+
+    int sectorIndex = oldNumSectors;
+
+    while (sectorIndex < newNumSectors) {
+        int indirIdx    = sectorIndex / NumIndirect;
+        int indirOffset = sectorIndex % NumIndirect;
+
+        ASSERT(indirIdx >= 0 && indirIdx < (int)NumDirect);
+        ASSERT(dataSectors[indirIdx] >= 0);
+
+        int indir[NumIndirect];
+        synchDisk->ReadSector(dataSectors[indirIdx], (char *)indir);
+
+        // Fill as many entries as possible in this indirect block
+        for (unsigned int j = indirOffset; j < NumIndirect && sectorIndex < newNumSectors; j++) {
+            int dataSector = freeMap->Find();
+            indir[j] = dataSector;
+
+            // Initialize new data block to zero
+            synchDisk->WriteSector(dataSector, zeros);
+
+            sectorIndex++;
+        }
+
+        // Persist this indirect block update
+        synchDisk->WriteSector(dataSectors[indirIdx], (char *)indir);
+    }
+
+    numBytes   = newFileSize;
+    numSectors = newNumSectors;
+    return TRUE;
 }

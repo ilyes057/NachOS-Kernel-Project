@@ -89,6 +89,7 @@ class OpenFile {
 					// than the UNIX idiom -- lseek to 
 					// end of file, tell, lseek back 
     int GetSeekPosition() const;
+	void replaceHeader(int hdrSector);
     
   private:
     FileHeader *hdr;			// Header for this file 

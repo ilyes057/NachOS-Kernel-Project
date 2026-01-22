@@ -119,8 +119,7 @@ typedef int OpenFileId;
 int Mkdir(const char *name);
 int Chdir(const char *name);
 /* Create a Nachos file, with "name" */
-//changed prototype t match kernel create function
-int Create(const char *name, int initialSize);
+int Create(const char *name);
 
 /* Open the Nachos file "name", and return an "OpenFileId" that can
  * be used to read and write to the file.

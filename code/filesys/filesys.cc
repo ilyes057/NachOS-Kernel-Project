@@ -163,6 +163,202 @@ FileSystem::~FileSystem() {
     delete dataLock;
 }
 
+bool
+FileSystem::ResolvePath(const char *path, int *sector, int *isDir)
+{
+    if (path == NULL || path[0] == '\0') {
+        return FALSE;
+    }
+
+    int secteurCourant = (path[0] == '/') ? DirectorySector : currentDirectorySector;
+    OpenFile *dossierCourant = new OpenFile(secteurCourant);
+    Directory *dossier = new Directory(NumDirEntries);
+
+    int i = 0;
+    bool aComposant = FALSE;
+
+    while (1) {
+        while (path[i] == '/') i++;
+        if (path[i] == '\0') {
+            if (!aComposant) {
+                *sector = DirectorySector;
+                *isDir = 1;
+            } else {
+                *sector = secteurCourant;
+                *isDir = 1;
+            }
+            delete dossier;
+            delete dossierCourant;
+            return TRUE;
+        }
+
+        char nom[FileNameMaxLen + 1];
+        int len = 0;
+        while (path[i] != '\0' && path[i] != '/') {
+            if (len >= FileNameMaxLen) {
+                delete dossier;
+                delete dossierCourant;
+                return FALSE;
+            }
+            nom[len++] = path[i++];
+        }
+        nom[len] = '\0';
+        aComposant = TRUE;
+
+        while (path[i] == '/') i++;
+        bool dernier = (path[i] == '\0');
+
+        if (!strcmp(nom, ".")) {
+            if (dernier) {
+                *sector = secteurCourant;
+                *isDir = 1;
+                delete dossier;
+                delete dossierCourant;
+                return TRUE;
+            }
+            continue;
+        }
+
+        if (!strcmp(nom, "..")) {
+            if (secteurCourant != DirectorySector) {
+                int secteurParent = -1;
+                int parentEstDir = 0;
+                dossier->FetchFrom(dossierCourant);
+                if (!dossier->Find("..", &secteurParent, &parentEstDir) || !parentEstDir) {
+                    delete dossier;
+                    delete dossierCourant;
+                    return FALSE;
+                }
+                delete dossierCourant;
+                dossierCourant = new OpenFile(secteurParent);
+                secteurCourant = secteurParent;
+            }
+            if (dernier) {
+                *sector = secteurCourant;
+                *isDir = 1;
+                delete dossier;
+                delete dossierCourant;
+                return TRUE;
+            }
+            continue;
+        }
+
+        dossier->FetchFrom(dossierCourant);
+        int secteurEnfant = -1;
+        int enfantEstDir = 0;
+        if (!dossier->Find(nom, &secteurEnfant, &enfantEstDir)) {
+            delete dossier;
+            delete dossierCourant;
+            return FALSE;
+        }
+
+        if (dernier) {
+            *sector = secteurEnfant;
+            *isDir = enfantEstDir;
+            delete dossier;
+            delete dossierCourant;
+            return TRUE;
+        }
+
+        if (!enfantEstDir) {
+            delete dossier;
+            delete dossierCourant;
+            return FALSE;
+        }
+
+        delete dossierCourant;
+        dossierCourant = new OpenFile(secteurEnfant);
+        secteurCourant = secteurEnfant;
+    }
+}
+
+bool
+FileSystem::ResolveParent(const char *path, OpenFile **parentFile, int *parentSector,
+                          char *nomFinal)
+{
+    if (path == NULL || path[0] == '\0') {
+        return FALSE;
+    }
+
+    int secteurCourant = (path[0] == '/') ? DirectorySector : currentDirectorySector;
+    OpenFile *dossierCourant = new OpenFile(secteurCourant);
+    Directory *dossier = new Directory(NumDirEntries);
+
+    int i = 0;
+
+    while (1) {
+        while (path[i] == '/') i++;
+        if (path[i] == '\0') {
+            delete dossier;
+            delete dossierCourant;
+            return FALSE;
+        }
+
+        char nom[FileNameMaxLen + 1];
+        int len = 0;
+        while (path[i] != '\0' && path[i] != '/') {
+            if (len >= FileNameMaxLen) {
+                delete dossier;
+                delete dossierCourant;
+                return FALSE;
+            }
+            nom[len++] = path[i++];
+        }
+        nom[len] = '\0';
+
+        while (path[i] == '/') i++;
+        bool dernier = (path[i] == '\0');
+
+        if (dernier) {
+            if (!strcmp(nom, ".") || !strcmp(nom, "..")) {
+                delete dossier;
+                delete dossierCourant;
+                return FALSE;
+            }
+            strncpy(nomFinal, nom, FileNameMaxLen);
+            nomFinal[FileNameMaxLen] = '\0';
+            *parentFile = dossierCourant;
+            *parentSector = secteurCourant;
+            delete dossier;
+            return TRUE;
+        }
+
+        if (!strcmp(nom, ".")) {
+            continue;
+        }
+
+        if (!strcmp(nom, "..")) {
+            if (secteurCourant != DirectorySector) {
+                int secteurParent = -1;
+                int parentEstDir = 0;
+                dossier->FetchFrom(dossierCourant);
+                if (!dossier->Find("..", &secteurParent, &parentEstDir) || !parentEstDir) {
+                    delete dossier;
+                    delete dossierCourant;
+                    return FALSE;
+                }
+                delete dossierCourant;
+                dossierCourant = new OpenFile(secteurParent);
+                secteurCourant = secteurParent;
+            }
+            continue;
+        }
+
+        dossier->FetchFrom(dossierCourant);
+        int secteurEnfant = -1;
+        int enfantEstDir = 0;
+        if (!dossier->Find(nom, &secteurEnfant, &enfantEstDir) || !enfantEstDir) {
+            delete dossier;
+            delete dossierCourant;
+            return FALSE;
+        }
+
+        delete dossierCourant;
+        dossierCourant = new OpenFile(secteurEnfant);
+        secteurCourant = secteurEnfant;
+    }
+}
+
 
 //----------------------------------------------------------------------
 // FileSystem::Create
@@ -196,62 +392,52 @@ FileSystem::~FileSystem() {
 bool
 FileSystem::Create(const char *name, int initialSize)
 {
-    Directory *directory;
-    BitMap *freeMap;
-    FileHeader *hdr;
-    int sector;
+    Directory *dossier;
+    BitMap *bitmap;
+    FileHeader *entete;
+    int secteur;
     bool success;
+    OpenFile *dossierParent = NULL;
+    int secteurParent = -1;
+    char nomFinal[FileNameMaxLen + 1];
 
     DEBUG('f', "Creating file %s, size %d\n", name, initialSize);
     dataLock->Acquire();
-    directory = new Directory(NumDirEntries);
-    directory->FetchFrom(directoryFile);
+    if (!ResolveParent(name, &dossierParent, &secteurParent, nomFinal)) {
+        dataLock->Release();
+        return FALSE;
+    }
 
-    if (directory->Find(name) != -1)
+    dossier = new Directory(NumDirEntries);
+    dossier->FetchFrom(dossierParent);
+
+    if (dossier->Find(nomFinal) != -1)
       success = FALSE;			// file is already in directory
     else {	
-        freeMap = new BitMap(NumSectors);
-        freeMap->FetchFrom(freeMapFile);
-        sector = freeMap->Find();	// find a sector to hold the file header
-    	if (sector == -1) 		
+        bitmap = new BitMap(NumSectors);
+        bitmap->FetchFrom(freeMapFile);
+        secteur = bitmap->Find();	// find a sector to hold the file header
+    	if (secteur == -1) 		
             success = FALSE;		// no free block for file header 
-        else if (!directory->Add(name, sector, 0))
+        else if (!dossier->Add(nomFinal, secteur, 0))
             success = FALSE;	// no space in directory
         else {
-                hdr = new FileHeader;
-            if (!hdr->Allocate(freeMap, initialSize))
+                entete = new FileHeader;
+            if (!entete->Allocate(bitmap, initialSize))
                     success = FALSE;	// no space on disk for data
             else {
                 success = TRUE;
             // everthing worked, flush all changes back to disk
-                    hdr->WriteBack(sector); 		
-                    directory->WriteBack(directoryFile);
-                    freeMap->WriteBack(freeMapFile);
-                    if (initialSize > 0) {
-                        OpenFile *newFile = new OpenFile(sector);
-                        if (newFile != NULL) {
-                            char zero[SectorSize];
-                            for (int i = 0; i < SectorSize; i++) {
-                                zero[i] = '\0';
-                            }
-                            int remaining = initialSize;
-                            while (remaining > 0) {
-                                int toWrite = (remaining > SectorSize) ? SectorSize : remaining;
-                                int n = newFile->Write(zero, toWrite);
-                                if (n != toWrite) {
-                                    break;
-                                }
-                                remaining -= n;
-                            }
-                            delete newFile;
-                        }
-                    }
+                    entete->WriteBack(secteur); 		
+                    dossier->WriteBack(dossierParent);
+                    bitmap->WriteBack(freeMapFile);
             }
-                delete hdr;
+                delete entete;
         }
-        delete freeMap;
+        delete bitmap;
     }
-    delete directory;
+    delete dossier;
+    delete dossierParent;
     dataLock->Release();
     return success;
 }
@@ -269,19 +455,17 @@ FileSystem::Create(const char *name, int initialSize)
 OpenFile *
 FileSystem::Open(const char *name)
 {
-    Directory *directory = new Directory(NumDirEntries);
     OpenFile *openFile = NULL;
-    int sector;
+    int secteurCible;
+    int estDossier = 0;
     dataLock->Acquire();
 
     DEBUG('f', "Opening file %s\n", name);
-    directory->FetchFrom(currentDirectoryFile);
-    sector = directory->Find(name); 
-    if (sector >= 0) 		
-	openFile = new OpenFile(sector);	// name was found in directory 
+    if (ResolvePath(name, &secteurCible, &estDossier) && !estDossier) {
+	openFile = new OpenFile(secteurCible);
+    }
     dataLock->Release();
 
-    delete directory;
     return openFile;				// return NULL if not found
 }
 
@@ -302,65 +486,77 @@ FileSystem::Open(const char *name)
 bool
 FileSystem::Remove(const char *name)
 { 
-    Directory *directory;
-    BitMap *freeMap;
-    FileHeader *fileHdr;
-    int sector=-1;
+    Directory *dossier;
+    BitMap *bitmap;
+    FileHeader *entete;
+    int secteurCible = -1;
+    int estDossier = 0;
+    OpenFile *dossierParent = NULL;
+    int secteurParent = -1;
+    char nomFinal[FileNameMaxLen + 1];
 
-    directory = new Directory(NumDirEntries);
+    dossier = new Directory(NumDirEntries);
     dataLock->Acquire();
-    directory->FetchFrom(currentDirectoryFile);
-    int isDir = 0;
-
-    if (!directory->Find(name, &sector, &isDir)) {
-        delete directory;
+    if (!ResolveParent(name, &dossierParent, &secteurParent, nomFinal)) {
+        delete dossier;
         dataLock->Release();
         return FALSE; // not found
     }
-    if (sector == -1) {
-       delete directory;
+    dossier->FetchFrom(dossierParent);
+
+    if (!dossier->Find(nomFinal, &secteurCible, &estDossier)) {
+        delete dossier;
+        delete dossierParent;
+        dataLock->Release();
+        return FALSE; // not found
+    }
+    if (secteurCible == -1) {
+       delete dossier;
+       delete dossierParent;
        dataLock->Release();
        return FALSE;			 // file not found 
     }
-    if (sysTable->IsOpen(sector)) {
-        delete directory;
+    if (sysTable->IsOpen(secteurCible)) {
+        delete dossier;
+        delete dossierParent;
         dataLock->Release();
         return FALSE;
     }
     //un rep ne peut etre supp que sil est vide
-    if (isDir) {
-        OpenFile *dirFile = new OpenFile(sector);
-        Directory *subdir = new Directory(NumDirEntries);
-        subdir->FetchFrom(dirFile);
+    if (estDossier) {
+        OpenFile *fichierDir = new OpenFile(secteurCible);
+        Directory *dossierEnfant = new Directory(NumDirEntries);
+        dossierEnfant->FetchFrom(fichierDir);
 
-        if (!subdir->IsEmpty()) {
-            delete subdir;
-            delete dirFile;
-            delete directory;
+        if (!dossierEnfant->IsEmpty()) {
+            delete dossierEnfant;
+            delete fichierDir;
+            delete dossier;
             dataLock->Release();
             return FALSE; //directory not empty
         }
 
-        delete subdir;
-        delete dirFile;
+        delete dossierEnfant;
+        delete fichierDir;
         //si vide, on continue et on supprime 
     }
     
-    fileHdr = new FileHeader;
-    fileHdr->FetchFrom(sector);
+    entete = new FileHeader;
+    entete->FetchFrom(secteurCible);
 
-    freeMap = new BitMap(NumSectors);
-    freeMap->FetchFrom(freeMapFile);
+    bitmap = new BitMap(NumSectors);
+    bitmap->FetchFrom(freeMapFile);
 
-    fileHdr->Deallocate(freeMap);  		// remove data blocks
-    freeMap->Clear(sector);			// remove header block
-    directory->Remove(name);
+    entete->Deallocate(bitmap);  		// remove data blocks
+    bitmap->Clear(secteurCible);			// remove header block
+    dossier->Remove(nomFinal);
 
-    freeMap->WriteBack(freeMapFile);		// flush to disk
-    directory->WriteBack(currentDirectoryFile);        // flush to disk
-    delete fileHdr;
-    delete directory;
-    delete freeMap;
+    bitmap->WriteBack(freeMapFile);		// flush to disk
+    dossier->WriteBack(dossierParent);        // flush to disk
+    delete entete;
+    delete dossier;
+    delete bitmap;
+    delete dossierParent;
     dataLock->Release();
 
     return TRUE;
@@ -374,11 +570,11 @@ FileSystem::Remove(const char *name)
 void
 FileSystem::List()
 {
-    Directory *directory = new Directory(NumDirEntries);
+    Directory *dossier = new Directory(NumDirEntries);
 
-    directory->FetchFrom(currentDirectoryFile);
-    directory->List();
-    delete directory;
+    dossier->FetchFrom(currentDirectoryFile);
+    dossier->List();
+    delete dossier;
 }
 
 //----------------------------------------------------------------------
@@ -394,80 +590,89 @@ FileSystem::List()
 void
 FileSystem::Print()
 {
-    FileHeader *bitHdr = new FileHeader;
-    FileHeader *dirHdr = new FileHeader;
-    BitMap *freeMap = new BitMap(NumSectors);
-    Directory *directory = new Directory(NumDirEntries);
+    FileHeader *enteteBitmap = new FileHeader;
+    FileHeader *enteteDir = new FileHeader;
+    BitMap *bitmap = new BitMap(NumSectors);
+    Directory *dossier = new Directory(NumDirEntries);
 
     printf("Bit map file header:\n");
-    bitHdr->FetchFrom(FreeMapSector);
-    bitHdr->Print();
+    enteteBitmap->FetchFrom(FreeMapSector);
+    enteteBitmap->Print();
 
     printf("Directory file header:\n");
-    dirHdr->FetchFrom(DirectorySector);
-    dirHdr->Print();
+    enteteDir->FetchFrom(DirectorySector);
+    enteteDir->Print();
 
-    freeMap->FetchFrom(freeMapFile);
-    freeMap->Print();
+    bitmap->FetchFrom(freeMapFile);
+    bitmap->Print();
 
-    directory->FetchFrom(currentDirectoryFile);
-    directory->Print();
+    dossier->FetchFrom(currentDirectoryFile);
+    dossier->Print();
 
-    delete bitHdr;
-    delete dirHdr;
-    delete freeMap;
-    delete directory;
+    delete enteteBitmap;
+    delete enteteDir;
+    delete bitmap;
+    delete dossier;
 } 
 
 //function to create a subdirectory of the current directory
 bool 
 FileSystem::MakeDirectory(char *name)
 {
-    Directory *currentdir = new Directory(NumDirEntries); 
-    Directory *subdir =new Directory(NumDirEntries);
-    FileHeader *hdr = new FileHeader;
-    BitMap *freeMap = new BitMap(NumSectors);
-    int sector;
+    Directory *dossierParent = new Directory(NumDirEntries); 
+    Directory *nouveauDir = new Directory(NumDirEntries);
+    FileHeader *entete = new FileHeader;
+    BitMap *bitmap = new BitMap(NumSectors);
+    int secteur;
     bool success = FALSE;
+    OpenFile *fichierParent = NULL;
+    int secteurParent = -1;
+    char nomFinal[FileNameMaxLen + 1];
 
     printf("Creating directory: %s\n", name);
-    //store directorytable of the current directory in currentdir
     dataLock->Acquire();
 
-    currentdir->FetchFrom(currentDirectoryFile);
+    if (!ResolveParent(name, &fichierParent, &secteurParent, nomFinal)) {
+        dataLock->Release();
+        delete dossierParent;
+        delete nouveauDir;
+        delete entete;
+        delete bitmap;
+        return FALSE;
+    }
 
-    //check the free map for a free sector to store the header of the subdirectory
-    freeMap->FetchFrom(freeMapFile);
-    sector = freeMap->Find(); 
+    dossierParent->FetchFrom(fichierParent);
 
-    if (sector == -1) {
+    //check the free map for a free sector to store the header of the new directory
+    bitmap->FetchFrom(freeMapFile);
+    secteur = bitmap->Find(); 
+
+    if (secteur == -1) {
         //no more available secotrs
         success = FALSE; 
         dataLock->Release();
     } else {
-        if (!hdr->Allocate(freeMap, DirectoryFileSize)) {
+        if (!entete->Allocate(bitmap, DirectoryFileSize)) {
             success = FALSE;
             dataLock->Release();
         } else {
-            hdr->WriteBack(sector);
-            if (!currentdir->Add(name, sector, 1)) {
+            entete->WriteBack(secteur);
+            if (!dossierParent->Add(nomFinal, secteur, 1)) {
                 success = FALSE;
                 dataLock->Release();
             } else {
                 //add mandatory entries
-                subdir->Add((char *)".", sector, 1);
-                subdir->Add((char *)"..", currentDirectorySector, 1); // Point to parent
-                hdr->WriteBack(sector); 
+                nouveauDir->Add((char *)".", secteur, 1);
+                nouveauDir->Add((char *)"..", secteurParent, 1); // Point to parent
+                entete->WriteBack(secteur); 
             
-                //write the directory table of the subdirectory (with . .. for now)
-                OpenFile *subdirf = new OpenFile(sector); // Create a temporary file handle
-                subdir->WriteBack(subdirf);
+                //write the directory table of the new directory (with . .. for now)
+                OpenFile *subdirf = new OpenFile(secteur); // Create a temporary file handle
+                nouveauDir->WriteBack(subdirf);
                 delete subdirf;
 
-                //changes being the fact that subdirwas addedto 
-                //the directory table and so it was rewritten to the file of the curr directroy
-                currentdir->WriteBack(currentDirectoryFile);
-                freeMap->WriteBack(freeMapFile);
+=                dossierParent->WriteBack(fichierParent);
+                bitmap->WriteBack(freeMapFile);
 
                 success = TRUE;
             }
@@ -476,10 +681,11 @@ FileSystem::MakeDirectory(char *name)
 
     dataLock->Release();
     // Cleanup memory
-    delete currentdir;
-    delete subdir;
-    delete hdr;
-    delete freeMap;
+    delete dossierParent;
+    delete nouveauDir;
+    delete entete;
+    delete bitmap;
+    delete fichierParent;
     
     return success;
 }
@@ -487,21 +693,17 @@ FileSystem::MakeDirectory(char *name)
 //function to change directory from the current one to a subdirectory
 bool
 FileSystem::ChangeDirectory(char *name){
-    Directory *directory = new Directory(NumDirEntries);
-    int sector;
+    int secteurCible;
     bool success = FALSE;  
     dataLock->Acquire();
 
-    directory->FetchFrom(currentDirectoryFile);
-
-    int isDir = 0;
-    if (directory->Find(name, &sector, &isDir) && isDir) {
+    int estDossier = 0;
+    if (ResolvePath(name, &secteurCible, &estDossier) && estDossier) {
         delete currentDirectoryFile;//fermeture de l'ancien rep.
-        currentDirectoryFile = new OpenFile(sector);//nouveau  rep
-        currentDirectorySector = sector;
+        currentDirectoryFile = new OpenFile(secteurCible);//nouveau  rep
+        currentDirectorySector = secteurCible;
         success=TRUE;
     }
-    delete directory;
     dataLock->Release();
     return success;
 }
@@ -509,11 +711,39 @@ FileSystem::ChangeDirectory(char *name){
 //function to get te sector of a file in the current directory
 int FileSystem::FindSector(const char *name)
 {
-    Directory *directory = new Directory(NumDirEntries);
     dataLock->Acquire();
-    directory->FetchFrom(currentDirectoryFile);
-    int sector = directory->Find(name);
-    delete directory;
+    int secteurCible = -1;
+    int estDossier = 0;
+    if (ResolvePath(name, &secteurCible, &estDossier) && estDossier) {
+        secteurCible = -1;
+    }
     dataLock->Release();
-    return sector; 
+    return secteurCible; 
+}
+
+bool
+FileSystem::ExtendFile(int hdrSector, int newSize)
+{
+    if (hdrSector < 0 || newSize < 0) return FALSE;
+
+    dataLock->Acquire();
+
+    BitMap *freeMap = new BitMap(NumSectors);
+    freeMap->FetchFrom(freeMapFile);
+
+    FileHeader *hdr = new FileHeader;
+    hdr->FetchFrom(hdrSector);
+
+    bool ok = TRUE;
+    ok = hdr->Extend(freeMap, newSize);   // à faire dans filehdr.(h/.cc)
+    if (ok) {
+        hdr->WriteBack(hdrSector);
+        freeMap->WriteBack(freeMapFile);
+    }
+
+    delete hdr;
+    delete freeMap;
+
+    dataLock->Release();
+    return ok;
 }

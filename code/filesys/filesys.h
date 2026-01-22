@@ -88,8 +88,11 @@ class FileSystem {
     void Print();			// List all the files and their contents
 	bool MakeDirectory(char *name);
 	bool ChangeDirectory(char *name);
+	bool ExtendFile(int hdrSector, int newSize);
 
   private:
+	bool ResolvePath(const char *path, int *sector, int *isDir);
+	bool ResolveParent(const char *path, OpenFile **dirFile, int *dirSector, char *leafName);
    OpenFile* freeMapFile;		// Bit map of free disk blocks,
 					// represented as a file
    OpenFile* directoryFile;		// "Root" directory -- list of 

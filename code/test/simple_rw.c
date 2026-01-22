@@ -16,7 +16,7 @@ int main() {
     char out[DATA_SIZE];
 
     PutString("=== simple_rw ===\n");
-    if (Create(FILE_NAME, DATA_SIZE) < 0) {
+    if (Create(FILE_NAME) < 0) {
         PutString("Create failed\n");
         Exit(1);
     }
