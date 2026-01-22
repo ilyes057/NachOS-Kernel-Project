@@ -42,7 +42,6 @@ void StartProcess(char *filename) {
     #else
     space->pid = 0;
     #endif
-
     currentThread->space = space;
 
     delete executable; // close file

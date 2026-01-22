@@ -290,24 +290,8 @@ void ExceptionHandler(ExceptionType which) {
 
         // --- FTP (FileTransfer) ---
         case SC_LocalList: {
-            char command[128];
-            // On récupère l'ID de la machine actuelle (1 pour serveur, 2 pour client, etc.)
-            int netname = postOffice->GetNetAddr(); 
-            
-            char myDir[32];
-            if (netname == 1) {
-                strcpy(myDir, "server_dir");
-            } else {
-                sprintf(myDir, "client%d_dir", netname);
-            }
-
-            printf("\n--- Contenu de la Sandbox (%s) ---\n", myDir);
-            
-            // On force 'ls' à regarder DANS le dossier spécifique
-            sprintf(command, "ls -F %s", myDir); 
-            system(command);
-            
-            printf("----------------------------------\n");
+            printf("\n--- NACHOS FILESYSTEM LIST (DISK) ---\n");
+            fileSystem->List(); // Affiche le contenu de l'index du disque simulé
             break;
         }
         case SC_FtpPut: {
@@ -337,7 +321,6 @@ void ExceptionHandler(ExceptionType which) {
             int addrP = machine->ReadRegister(5);
             char p[128];
             copyStringFromMachine(addrP, p, 128);
-            
             fileTransfer->RequestList(to, p);
             break;
         }
@@ -368,17 +351,6 @@ void ExceptionHandler(ExceptionType which) {
             fileTransfer->RequestDelete(to, p);
             break;
         }
-        case SC_FtpRename: {
-            int to = machine->ReadRegister(4);
-            int addrOld = machine->ReadRegister(5);
-            int addrNew = machine->ReadRegister(6);
-            char o[128], n[128];
-            copyStringFromMachine(addrOld, o, 128);
-            copyStringFromMachine(addrNew, n, 128);
-            
-            fileTransfer->RequestRename(to, o, n);
-            break;
-        }
         case SC_FtpStartServer: {
             // Attention: Fonction bloquante (boucle infinie)
             fileTransfer->StartServer(); 
@@ -387,36 +359,26 @@ void ExceptionHandler(ExceptionType which) {
         
         case SC_LocalCat: {
             int userAddr = machine->ReadRegister(4);
-            char fileName[64];
-            char command[128];
-            int val;
+            char fileName[MAX_STRING_SIZE];
+            copyStringFromMachine(userAddr, fileName, MAX_STRING_SIZE);
 
-            // 1. Lire le nom du fichier depuis la mémoire utilisateur vers le noyau
-            for (int i = 0; i < 63; i++) {
-                if (!machine->ReadMem(userAddr + i, 1, &val)) break;
-                fileName[i] = (char)val;
-                if (fileName[i] == '\0') break;
+            OpenFile *openFile = fileSystem->Open(fileName); // Ouverture via Nachos
+            if (openFile == NULL) {
+                printf("Erreur: Fichier '%s' introuvable sur le DISK.\n", fileName);
+                break;
             }
-            fileName[63] = '\0'; // Sécurité
+            int fileLen = openFile->Length();
+            char *buffer = new char[fileLen + 1];
+            openFile->Read(buffer, fileLen); // Lecture des secteurs du DISK
+            buffer[fileLen] = '\0';
 
-            // 2. Identifier le dossier sandbox (client2_dir ou server_dir)
-            int netname = postOffice->GetNetAddr();
-            char myDir[32];
-            if (netname == 1) strcpy(myDir, "server_dir");
-            else sprintf(myDir, "client%d_dir", netname);
+            printf("\n--- Contenu de %s ---\n%s\n", fileName, buffer);
 
-            // 3. Exécuter la commande Linux
-            printf("\n--- Contenu de %s/%s ---\n", myDir, fileName);
-            sprintf(command, "cat %s/%s", myDir, fileName);
-            
-            // On lance la commande système
-            if (system(command) != 0) {
-                printf("Erreur : Impossible d'afficher le fichier (vérifiez le nom).\n");
-            }
-            
+            delete openFile;
+            delete[] buffer;
             break;
-}
-        #endif // NETWOR
+        }
+        #endif // NETWORK
         #ifdef FILESYS
         case SC_Open: {
             int userAddr = machine->ReadRegister(4);
