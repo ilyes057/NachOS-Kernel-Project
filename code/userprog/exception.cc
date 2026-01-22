@@ -31,6 +31,7 @@
 #include "openfile.h"
 #include "filesys.h"
 #include "systemTable.h"
+#include "filehdr.h"
 //static Lock tablePrintLock("tablePrintLock");
 #endif
 
@@ -510,17 +511,6 @@ void ExceptionHandler(ExceptionType which) {
                 machine->WriteRegister(2, -1);
                 break;
             }
-            int pos     = f->GetSeekPosition();
-            int fileLen = f->Length();
-            int newEnd  = pos + size;
-            if (newEnd > fileLen) {
-                bool ok = fileSystem->ExtendFile(hdrSector, newEnd);
-                if (!ok) {
-                    machine->WriteRegister(2, -1);
-                    break;
-                }
-                f->replaceHeader(hdrSector);
-            }
             char *kbuf = new char[size];
             if (!copyBufferFromMachine(userBuf, kbuf, (unsigned)size)) {
                 delete[] kbuf;
@@ -531,7 +521,7 @@ void ExceptionHandler(ExceptionType which) {
             int n = f->Write(kbuf, size);
             delete[] kbuf;
 
-            machine->WriteRegister(2, n);
+            machine->WriteRegister(2, n < 0 ? -1 : n);
             break;
         }
         case SC_Create: {

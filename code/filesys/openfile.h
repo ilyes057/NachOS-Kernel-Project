@@ -93,8 +93,10 @@ class OpenFile {
     
   private:
     FileHeader *hdr;			// Header for this file 
+    int hdrSector;			// Header sector for this file
     int seekPosition;			// Current position within the file
 	Lock* seekLock;
+	Lock* ioLock;
 };
 
 #endif // FILESYS

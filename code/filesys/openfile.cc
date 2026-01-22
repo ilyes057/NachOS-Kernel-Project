@@ -31,7 +31,9 @@ OpenFile::OpenFile(int sector)
     hdr = new FileHeader;
     hdr->FetchFrom(sector);
     seekLock=new Lock("seekLock");
-    seekPosition = 0;
+    ioLock=new Lock("ioLock");
+   seekPosition = 0;
+    hdrSector = sector;
 }
 
 //----------------------------------------------------------------------
@@ -43,6 +45,7 @@ OpenFile::~OpenFile()
 {
     delete hdr;
     delete seekLock;
+    delete ioLock;
 }
 
 //----------------------------------------------------------------------
@@ -77,27 +80,46 @@ OpenFile::Seek(int position)
 int
 OpenFile::Read(char *into, int numBytes)
 {
-
+    ioLock->Acquire();
     int pos;
     seekLock->Acquire();
     pos=seekPosition;
     seekPosition += numBytes;
     seekLock->Release();
     int result = ReadAt(into, numBytes, pos);
+    ioLock->Release();
     return result;
 }
 
 int
 OpenFile::Write(const char *into, int numBytes)
 {
-    int pos;
-    seekLock->Acquire();
-    pos=seekPosition;
+    if (numBytes <= 0) {
+        return 0;
+    }
+    ioLock->Acquire();
+    int pos = seekPosition;
     seekPosition += numBytes;
-    seekLock->Release();
-    int result = WriteAt(into, numBytes, pos);
+
+    FileHeader tmp;
+    tmp.FetchFrom(hdrSector);
+    int fileLen = tmp.FileLength();
+
+    int newEnd = pos + numBytes;
+    if (newEnd > fileLen) {
+        if (!fileSystem->ExtendFile(hdrSector, newEnd)) {
+            ioLock->Release();
+            return -1;
+        }
+    }
+    replaceHeader(hdrSector);
+    int result =WriteAt(into, numBytes, pos);
+    ioLock->Release();
+
     return result;
 }
+
+
 
 //----------------------------------------------------------------------
 // OpenFile::ReadAt/WriteAt
@@ -167,6 +189,8 @@ OpenFile::WriteAt(const char *from, int numBytes, int position)
 	return 0;				// check request
     if ((position + numBytes) > fileLength)
 	numBytes = fileLength - position;
+    if (numBytes <= 0)
+        return 0;
     DEBUG('f', "Writing %d bytes at %d, from file of length %d.\n", 	
 			numBytes, position, fileLength);
 
@@ -215,9 +239,10 @@ OpenFile::GetSeekPosition() const
 }
 
 void
-OpenFile::replaceHeader(int hdrSector)
+OpenFile::replaceHeader(int newHdrSector)
 {
     seekLock->Acquire();
-    hdr->FetchFrom(hdrSector);
+    this->hdrSector = newHdrSector;
+    hdr->FetchFrom(newHdrSector);
     seekLock->Release();
 }
