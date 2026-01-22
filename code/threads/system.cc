@@ -139,19 +139,16 @@ void Initialize(int argc, char **argv) {
     interrupt->Enable();
     CallOnUserAbort(Cleanup);
 
-#if defined(STEP4) || defined(NETWORK)
-    frameProvider = new FrameProvider(NumPhysPages);
-    InitProcessSystem(); 
-#endif
-
 #ifdef USER_PROGRAM
     machine = new Machine(debugUserProg);
     synchconsole = new SynchConsole(NULL, NULL);
-#endif
-#if defined(STEP4) || defined(STEP5)
-    frameProvider = new FrameProvider(NumPhysPages);
-    InitProcessSystem();
 
+    #if defined(STEP4) || defined(STEP5) || defined(NETWORK)
+    if (frameProvider == nullptr) { // Sécurité anti-double initialisation
+        frameProvider = new FrameProvider(NumPhysPages);
+        InitProcessSystem(); 
+    }
+    #endif
 #endif
 
 #ifdef FILESYS
