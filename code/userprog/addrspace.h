@@ -26,7 +26,7 @@ class Semaphore;
 class List;
 
 #define OneUserStackSize 256 // increase this as necessary!
-#define MAX_USER_THREADS 20
+#define MAX_USER_THREADS 10
 
 
 struct ThreadState {

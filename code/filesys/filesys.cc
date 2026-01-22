@@ -671,7 +671,7 @@ FileSystem::MakeDirectory(char *name)
                 nouveauDir->WriteBack(subdirf);
                 delete subdirf;
 
-=                dossierParent->WriteBack(fichierParent);
+                dossierParent->WriteBack(fichierParent);
                 bitmap->WriteBack(freeMapFile);
 
                 success = TRUE;
