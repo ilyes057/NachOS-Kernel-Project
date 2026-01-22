@@ -6,7 +6,7 @@
 
 class FileTransfer {
   public:
-    FileTransfer(VarPostOffice *vpo_, ReliablePostOffice *rpo_, const char *baseDir = ".");
+    FileTransfer(VarPostOffice *vpo_, ReliablePostOffice *rpo_);
     ~FileTransfer();
 
     bool RequestList(int serverMachine, const char *remotePath);        // ls
@@ -16,26 +16,13 @@ class FileTransfer {
     bool RequestMkdir(int serverMachine, const char *remotePath);       // mkdir
     bool RequestRmdir(int serverMachine, const char *remotePath);       // rmdir
     
-    bool RequestRename(int serverMachine, const char *oldName, const char *newName);
-
-    void ListLocal();                         
-    bool LocalMkdir(const char *name);        
-    bool LocalRmdir(const char *name);        
-    bool LocalDelete(const char *name);       
-    
-    bool LocalRename(const char *oldName, const char *newName); 
-    void PrintWorkingDir();                   
-
+    bool RequestRename(int serverMachine, const char *oldName, const char *newName);               
     // --- SERVEUR ---
     void StartServer();
 
   private:
     VarPostOffice *vpo;
     ReliablePostOffice *rpo;
-    char baseDirectory[128]; // Notre Sandbox
-
-    void GetRealLocalPath(const char *filename, char *outBuffer, int maxLen);
-
     // Helpers Système
     bool ReadFileContent(const char *filename, char **outData, int *outSize);
     bool WriteFileContent(const char *filename, const char *data, int size);

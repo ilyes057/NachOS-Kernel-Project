@@ -357,14 +357,6 @@ FtpDelete:
     j     $31
     .end  FtpDelete
 
-    .globl FtpRename
-    .ent   FtpRename
-FtpRename:
-    addiu $2,$0,SC_FtpRename
-    syscall
-    j     $31
-    .end  FtpRename
-
     .globl FtpStartServer
     .ent   FtpStartServer
 FtpStartServer:

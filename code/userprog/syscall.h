@@ -53,7 +53,6 @@
 #define SC_FtpMkdir 32
 #define SC_FtpRmdir 33
 #define SC_FtpDelete 34
-#define SC_FtpRename 35
 #define SC_FtpStartServer 36
 #define SC_LocalList 37
 #define SC_LocalCat 38
@@ -180,7 +179,6 @@ void FtpList(int to, char *remotePath);
 void FtpMkdir(int to, char *remotePath);
 void FtpRmdir(int to, char *remotePath);
 void FtpDelete(int to, char *remoteFile);
-void FtpRename(int to, char *oldName, char *newName);
 void FtpStartServer();
 void LocalList(char *path);
 void LocalCat(char *filename);

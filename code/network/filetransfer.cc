@@ -2,34 +2,11 @@
 #include "system.h"
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <dirent.h>
-
-FileTransfer::FileTransfer(VarPostOffice *vpo_, ReliablePostOffice *rpo_, const char *baseDir)
+FileTransfer::FileTransfer(VarPostOffice *vpo_, ReliablePostOffice *rpo_)
     : vpo(vpo_), rpo(rpo_) {
-    // Initialisation du dossier racine (Sandbox)
-    if (baseDir) {
-        strncpy(baseDirectory, baseDir, 127);
-        baseDirectory[127] = '\0';
-    } else {
-        strcpy(baseDirectory, ".");
-    }
-
-    // Création physique du dossier racine (Permission 0777)
-    mkdir(baseDirectory, 0777); 
 }
 
 FileTransfer::~FileTransfer() {}
-void FileTransfer::GetRealLocalPath(const char *filename, char *outBuffer, int maxLen) {
-    if (!filename || strlen(filename) == 0 || strcmp(filename, ".") == 0) {
-        strncpy(outBuffer, baseDirectory, maxLen);
-    } else {
-        snprintf(outBuffer, maxLen, "%s/%s", baseDirectory, filename);
-    }
-}
 
 // --- PARSEUR DE COMMANDE ---
 bool FileTransfer::ParseCommand(const char *cmd, char *type, char *arg1, char *arg2, int maxLen) {
@@ -64,118 +41,45 @@ bool FileTransfer::ParseCommand(const char *cmd, char *type, char *arg1, char *a
 
 
 bool FileTransfer::ReadFileContent(const char *filename, char **outData, int *outSize) {
-    char realPath[512];
-    GetRealLocalPath(filename, realPath, 512);
+    OpenFile *openFile = fileSystem->Open(filename);
+    if (openFile == NULL) return false;
 
-    struct stat s;
-    if (stat(realPath, &s) == 0) {
-        if (S_ISDIR(s.st_mode)) {
-            printf("[ERREUR] '%s' est un dossier. Lecture interdite.\n", filename);
-            return false;
-        }
-    }
-
-    int fd = open(realPath, O_RDONLY);
-    if (fd < 0) return false;
-
-    off_t size = lseek(fd, 0, SEEK_END);
-    lseek(fd, 0, SEEK_SET);
-
-    if (size < 0) { close(fd); return false; }
-
+    int size = openFile->Length();
     char *data = new char[size + 1];
-    int totalRead = 0;
-    while (totalRead < size) {
-        int r = read(fd, data + totalRead, size - totalRead);
-        if (r <= 0) break;
-        totalRead += r;
-    }
-    close(fd);
+    
+    // On lit directement depuis le disque simulé
+    int totalRead = openFile->Read(data, size);
+    data[totalRead] = '\0';
+    
+    delete openFile; 
     
     if (totalRead != size) { delete[] data; return false; }
-
     *outData = data;
-    *outSize = (int)size;
+    *outSize = size;
     return true;
 }
 
 bool FileTransfer::WriteFileContent(const char *filename, const char *data, int size) {
-    char realPath[512];
-    GetRealLocalPath(filename, realPath, 512);
+    if (!fileSystem->Create(filename, size)) return false;
+    OpenFile *openFile = fileSystem->Open(filename);
+    if (openFile == NULL) return false;
 
-    int fd = open(realPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return false;
-
-    int totalWritten = 0;
-    while (totalWritten < size) {
-        int w = write(fd, data + totalWritten, size - totalWritten);
-        if (w <= 0) { close(fd); return false; }
-        totalWritten += w;
-    }
-    close(fd);
-    return (totalWritten == size);
+    int written = openFile->Write(data, size);
+    delete openFile;
+    return (written == size);
 }
 
 
 bool FileTransfer::GetDirectoryListing(const char *path, char **outList, int *outLen) {
-    char realPath[512];
-    GetRealLocalPath(path, realPath, 512);
+    printf("[SERVER] Le client demande la liste des fichiers du DISK.\n");
+    fileSystem->List(); 
 
-    DIR *d = opendir(realPath);
-    if (!d) return false;
-
-    char bigBuffer[4096]; bigBuffer[0] = '\0';
-    struct dirent *dir;
-
-    while ((dir = readdir(d)) != NULL) {
-        if (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0) continue;
-        strcat(bigBuffer, (dir->d_type == DT_DIR) ? "[DIR ] " : "[FILE] ");
-        strcat(bigBuffer, dir->d_name);
-        strcat(bigBuffer, "\n");
-        if (strlen(bigBuffer) > 4000) break;
-    }
-    closedir(d);
-
-    int len = strlen(bigBuffer);
-    char *res = new char[len + 1];
-    strcpy(res, bigBuffer);
-    *outList = res; *outLen = len;
+    const char *msg = "--- Liste DISK (Consultez la console du Serveur) ---";
+    *outLen = strlen(msg) + 1;
+    *outList = new char[*outLen];
+    strcpy(*outList, msg);
     return true;
 }
-
-void FileTransfer::ListLocal() {
-    char *list = NULL; int len = 0;
-    if (GetDirectoryListing(".", &list, &len)) {
-        printf("\n=== Fichiers Locaux (%s) ===\n%s------------------------------\n", baseDirectory, list);
-        delete[] list;
-    } else {
-        printf("Erreur lecture dossier local.\n");
-    }
-}
-
-void FileTransfer::PrintWorkingDir() {
-    printf("Dossier Racine (Sandbox): %s\n", baseDirectory);
-}
-
-bool FileTransfer::LocalMkdir(const char *name) {
-    char p[512]; GetRealLocalPath(name, p, 512);
-    return (mkdir(p, 0777) == 0);
-}
-bool FileTransfer::LocalRmdir(const char *name) {
-    char p[512]; GetRealLocalPath(name, p, 512);
-    return (rmdir(p) == 0);
-}
-bool FileTransfer::LocalDelete(const char *name) {
-    char p[512]; GetRealLocalPath(name, p, 512);
-    return (unlink(p) == 0);
-}
-bool FileTransfer::LocalRename(const char *oldName, const char *newName) {
-    char pOld[512], pNew[512];
-    GetRealLocalPath(oldName, pOld, 512);
-    GetRealLocalPath(newName, pNew, 512);
-    return (rename(pOld, pNew) == 0);
-}
-
 // --- CLIENT : REQUÊTES DISTANTES ---
 bool SendSimpleCmd(VarPostOffice *_vpo, ReliablePostOffice *_rpo, int s, const char *cmd) {
     if (!_vpo->SendLong(s, cmd, strlen(cmd) + 1)) return false;
@@ -195,10 +99,6 @@ bool FileTransfer::RequestMkdir(int s, const char *f) {
 bool FileTransfer::RequestRmdir(int s, const char *f) { 
     char c[256]; snprintf(c,256,"RMDIR %s",f); return SendSimpleCmd(vpo,rpo,s,c); 
 }
-bool FileTransfer::RequestRename(int s, const char *oldN, const char *newN) {
-    char c[256]; snprintf(c, 256, "REN %s %s", oldN, newN); return SendSimpleCmd(vpo, rpo, s, c);
-}
-
 bool FileTransfer::RequestList(int s, const char *path) {
     char c[256]; snprintf(c,256,"LIST %s", (strlen(path)>0)?path:".");
     if (!vpo->SendLong(s, c, strlen(c)+1)) return false;
@@ -258,67 +158,45 @@ bool FileTransfer::RequestPut(int s, const char *local, const char *remote) {
 // --- SERVEUR ---
 
 void FileTransfer::StartServer() {
-    printf("[SERVER] Racine: '%s'. En attente...\n", baseDirectory);
+    printf("[SERVER] FTP démarré sur DISK simulé.\n");
 
     while (true) {
-        char *cb=NULL; int f=-1;
+        char *cb = NULL; int f = -1;
         int len = vpo->ReceiveLongAlloc(&f, &cb);
         if (len <= 0) { if(cb) delete[] cb; continue; }
 
-        char buffer[MAX_CMD_LEN];
-        strncpy(buffer, cb, MAX_CMD_LEN-1); buffer[MAX_CMD_LEN-1] = '\0';
+        char type[10], arg1[128], arg2[128];
+        if (!ParseCommand(cb, type, arg1, arg2, 128)) { delete[] cb; continue; }
         delete[] cb;
 
-        char type[10], arg1[128], arg2[128];
-        if (!ParseCommand(buffer, type, arg1, arg2, 128)) continue;
-
-        printf("[SERVER] CMD '%s' de %d (Args: %s, %s)\n", type, f, arg1, arg2);
-
-        char real1[512]; GetRealLocalPath(arg1, real1, 512);
-
         if (strcmp(type, "GET") == 0) {
-            char *d=NULL; int s=0;
+            char *d = NULL; int s = 0;
             if (ReadFileContent(arg1, &d, &s)) {
                 vpo->SendLong(f, d, s); 
                 delete[] d; 
                 char a[10]; rpo->ReceiveReliable(&f, a, 10);
             } else {
-                vpo->SendLong(f, "ERROR File Not Found or Invalid", 30);
+                vpo->SendLong(f, "ERROR", 6);
             }
-
         } else if (strcmp(type, "PUT") == 0) {
             rpo->SendReliable(f, "READY", 6);
-            char *fc=NULL; int s = vpo->ReceiveLongAlloc(&f, &fc);
+            char *fc = NULL; int s = vpo->ReceiveLongAlloc(&f, &fc);
             if (s >= 0) {
                 if (WriteFileContent(arg1, fc, s)) rpo->SendReliable(f, "ACK", 4);
-                else rpo->SendReliable(f, "ERROR Write Failed", 19);
+                else rpo->SendReliable(f, "ERROR", 6);
                 delete[] fc;
             }
-
         } else if (strcmp(type, "DEL") == 0) {
-            if (unlink(real1) == 0) rpo->SendReliable(f, "ACK", 4);
-            else rpo->SendReliable(f, "ERROR Delete Failed", 20);
-
+            if (fileSystem->Remove(arg1)) rpo->SendReliable(f, "ACK", 4); //
+            else rpo->SendReliable(f, "ERROR", 6);
         } else if (strcmp(type, "MKDIR") == 0) {
-            if (mkdir(real1, 0777) == 0) rpo->SendReliable(f, "ACK", 4);
-            else rpo->SendReliable(f, "ERROR Mkdir Failed", 19);
-
-        } else if (strcmp(type, "RMDIR") == 0) {
-            if (rmdir(real1) == 0) rpo->SendReliable(f, "ACK", 4);
-            else rpo->SendReliable(f, "ERROR Rmdir Failed", 19);
-
-        } else if (strcmp(type, "REN") == 0) {
-            char real2[512]; GetRealLocalPath(arg2, real2, 512);
-            if (rename(real1, real2) == 0) rpo->SendReliable(f, "ACK", 4);
-            else rpo->SendReliable(f, "ERROR Rename Failed", 20);
-
+            if (fileSystem->MakeDirectory(arg1)) rpo->SendReliable(f, "ACK", 4); //
+            else rpo->SendReliable(f, "ERROR", 6);
         } else if (strcmp(type, "LIST") == 0) {
-            char *l=NULL; int ll=0;
+            char *l = NULL; int ll = 0;
             if (GetDirectoryListing(arg1, &l, &ll)) {
                 vpo->SendLong(f, l, ll);
                 delete[] l;
-            } else {
-                vpo->SendLong(f, "ERROR List Failed", 18);
             }
         }
     }

@@ -63,7 +63,6 @@ extern void FileTransferTest(int farAddr);
 extern void ReliablePostTest(int farAddr);
 extern void VarPostTest(int farAddr);
 extern void RingTest();
-extern void InteractiveTest(int farAddr);
 //----------------------------------------------------------------------
 // main
 //      Bootstrap the operating system kernel.
@@ -201,10 +200,6 @@ int main(int argc, char **argv) {
                 case 4:
                     printf(">>> Lancement RingTest (Rel: %.2f)\n", reliability);
                     RingTest();
-                    break;
-                case 5:
-                    printf(">>> Lancement InteractiveTest (Rel: %.2f)\n", reliability);
-                    InteractiveTest(farAddr);
                     break;
                 default:
                     printf("Test ID inconnu. 1=File, 2=Reliable, 3=Var, 4=Ring\n");

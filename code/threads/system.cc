@@ -79,6 +79,7 @@ void Initialize(int argc, char **argv) {
     int argCount;
     const char *debugArgs = "";
     bool randomYield = FALSE;
+    int netname __attribute__((unused)) = -1;
 
     #ifdef USER_PROGRAM
         bool debugUserProg = FALSE;
@@ -88,7 +89,6 @@ void Initialize(int argc, char **argv) {
     #endif
     #ifdef NETWORK
         double rely = 1;
-        int netname = -1; 
     #endif
 
     for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
@@ -155,7 +155,11 @@ void Initialize(int argc, char **argv) {
 #endif
 
 #ifdef FILESYS
-    synchDisk = new SynchDisk("DISK");
+    char diskName[32];
+    int id = (netname != -1) ? netname : 0;
+    sprintf(diskName, "DISK_%d", id); 
+    
+    synchDisk = new SynchDisk(diskName);
     sysTable = new systemTable(10);
 #endif
 
@@ -168,21 +172,9 @@ void Initialize(int argc, char **argv) {
         postOffice = new PostOffice(netname, rely, 10);
         rpo = new ReliablePostOffice(postOffice, 1);
         vpo = new VarPostOffice(rpo);
-
-        char myRoot[64];
-        if (netname == 1) {
-            strcpy(myRoot, "server_dir");
-        } else {
-            sprintf(myRoot, "client%d_dir", netname);
-        }
-
-        // Création automatique du répertoire s'il n'existe pas
-        mkdir(myRoot, 0755);
-
         // On initialise le transfert de fichiers avec ce répertoire racine
-        fileTransfer = new FileTransfer(vpo, rpo, myRoot);
+        fileTransfer = new FileTransfer(vpo, rpo);
         
-        printf("[SYSTEM] Machine %d initialized. Root directory: %s/\n", netname, myRoot);
         
         /* NOTE: On ne fait pas chdir(myRoot) ici car Nachos ne trouverait 
            plus le binaire utilisateur (ex: ftp_client) qui est dans build/.
